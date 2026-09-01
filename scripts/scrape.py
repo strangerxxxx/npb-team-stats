@@ -19,13 +19,15 @@ from config import (
 )
 from teams import TEAM_CODE_TO_ABBR
 
-TEAM_CODE_RE = re.compile(r"ini_([a-z]+)_m\.png")
+TEAM_IMG_RE = re.compile(r"(?:ini|logo)_([a-z]+)_[ms]\.(?:gif|png)")
 LOGO_CODE_RE = re.compile(r"logo_([a-z]+)_m\.(?:gif|png)")
+DAILY_HREF_RE = re.compile(r"/scores/(\d{4})/(\d{2})(\d{2})/")
+FINISHED_MARK = "試合終了"
 
 
 def team_abbr_from_img(img) -> str | None:
     src = img.get("src", "")
-    m = TEAM_CODE_RE.search(src)
+    m = TEAM_IMG_RE.search(src)
     if not m:
         return None
     return TEAM_CODE_TO_ABBR.get(m.group(1))
@@ -102,24 +104,97 @@ def parse_month(year: int, month: int) -> tuple[list[tuple[str, str, str, str, s
     return parse_schedule_html(res.content, year, month)
 
 
+def parse_daily_html(
+    html: str | bytes, year: int
+) -> list[tuple[str, str, str, str, str]]:
+    """https://npb.jp/games/{year}/ の試合速報から、試合終了だけ取り出す。"""
+    soup = BeautifulSoup(html, "html.parser")
+    root = soup.find("div", id="game_score")
+    if root is None:
+        return []
+
+    games: list[tuple[str, str, str, str, str]] = []
+    for block in root.select("a.link_block"):
+        state = block.select_one("td.state")
+        if state is None or FINISHED_MARK not in state.get_text():
+            continue
+        scores = [s.get_text(strip=True) for s in block.select("td.score")]
+        if len(scores) != 2 or not scores[0].isdigit() or not scores[1].isdigit():
+            continue
+        imgs = block.select("td.team1 img, td.team2 img")
+        if len(imgs) != 2:
+            continue
+        ateam = team_abbr_from_img(imgs[0])
+        bteam = team_abbr_from_img(imgs[1])
+        if not ateam or not bteam:
+            continue
+        href = block.get("href", "")
+        match = DAILY_HREF_RE.search(href)
+        if not match:
+            continue
+        ymd = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+        if not ymd.startswith(f"{year}-"):
+            continue
+        games.append((ymd, ateam, scores[0], bteam, scores[1]))
+    return games
+
+
+def fetch_daily_games(year: int) -> list[tuple[str, str, str, str, str]]:
+    url = f"https://npb.jp/games/{year}/"
+    res = requests.get(url, timeout=30)
+    res.raise_for_status()
+    return parse_daily_html(res.content, year)
+
+
+def upsert_games(
+    games: list[tuple[str, str, str, str, str]],
+    extra: list[tuple[str, str, str, str, str]],
+) -> list[tuple[str, str, str, str, str]]:
+    """同じ日の同一カードは extra で上書きする。"""
+    index = {
+        (ymd, frozenset((ateam, bteam))): i
+        for i, (ymd, ateam, _ascore, bteam, _bscore) in enumerate(games)
+    }
+    out = list(games)
+    for game in extra:
+        ymd, ateam, _ascore, bteam, _bscore = game
+        key = (ymd, frozenset((ateam, bteam)))
+        if key in index:
+            out[index[key]] = game
+        else:
+            index[key] = len(out)
+            out.append(game)
+    return out
+
+
 def scrape_year(year: int) -> tuple[list[str], dict[str, int]]:
     SCORES_DIR.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
+    games: list[tuple[str, str, str, str, str]] = []
     prev_ranks: dict[str, int] = {}
     # 開幕が3月の年もあるため 3〜11 月を対象にする
     months = range(3, 12)
     last_month = 11
     for month in months:
         try:
-            games, ranks = parse_month(year, month)
-            for ymd, ateam, ascore, bteam, bscore in games:
-                lines.append(f"{ymd},{ateam},{ascore},{bteam},{bscore}\n")
+            month_games, ranks = parse_month(year, month)
+            games.extend(month_games)
             if ranks and not prev_ranks:
                 prev_ranks = ranks
         except requests.RequestException:
             pass
         if month < last_month:
             time.sleep(1)
+
+    if year == date.today().year:
+        try:
+            games = upsert_games(games, fetch_daily_games(year))
+        except requests.RequestException:
+            pass
+
+    lines = [
+        f"{ymd},{ateam},{ascore},{bteam},{bscore}\n"
+        for ymd, ateam, ascore, bteam, bscore in games
+    ]
     return lines, prev_ranks
 
 
