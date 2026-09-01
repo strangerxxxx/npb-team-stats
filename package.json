@@ -1,0 +1,34 @@
+{
+  "name": "npb-ratings",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "papaparse": "^5.7.0",
+    "react": "^19.2.8",
+    "react-bootstrap": "^2.10.10",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^30.0.1",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "build:pages": "vite build --base /npb-team-stats/",
+    "preview": "vite preview",
+    "test": "vitest run && python -m unittest discover -s tests -p test_*.py",
+    "test:watch": "vitest",
+    "scrape": "python scripts/scrape.py",
+    "compute": "python scripts/compute.py",
+    "update": "python scripts/scrape.py && python scripts/compute.py"
+  }
+}

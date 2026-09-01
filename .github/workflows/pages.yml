@@ -1,0 +1,81 @@
+name: Update and deploy Pages
+
+on:
+  schedule:
+    # 21:00〜27:00 JST（UTC 12:00〜18:00）の毎時 0 分
+    - cron: "0 12-18 * * *"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_update: ${{ steps.season.outputs.should_update }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - id: season
+        env:
+          REQUIRE_SEASON_WINDOW: ${{ github.event_name == 'schedule' }}
+        run: python scripts/ci_should_update.py
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.should_update == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      BASE_PATH: /${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sim
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape and compute
+        run: python scripts/scrape.py && python scripts/compute.py
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

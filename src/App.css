@@ -1,0 +1,211 @@
+:root {
+  --bg: #eef3ef;
+  --panel: #ffffff;
+  --ink: #1c2a24;
+  --muted: #5d6f67;
+  --line: #d5e0d9;
+  --header: #16382b;
+  --accent: #1f6b4a;
+  --gold: #fff6d8;
+  --cs: #f3faf6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: 0.02em;
+}
+
+h1 {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 2px solid var(--accent);
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.6rem;
+  color: var(--accent);
+}
+
+.page-body {
+  padding-top: 1.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.site-header {
+  background: var(--header);
+  color: #fff;
+  padding: 1.15rem 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.site-header p {
+  margin: 0.2rem 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.92rem;
+}
+
+.site-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.15rem 1.2rem 1.05rem;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 1px 2px rgba(22, 56, 43, 0.04);
+}
+
+.panel-lead,
+.magic-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.league-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.remain-heading {
+  margin-top: 0.4rem;
+}
+
+.table {
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+.table thead th {
+  background: #f4f8f5;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.stats-table td,
+.stats-table th {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.stats-table td:first-child,
+.stats-table th:first-child,
+.remain-table th:first-child {
+  text-align: left;
+}
+
+.has-rank-col td:first-child,
+.has-rank-col th:first-child {
+  text-align: center;
+}
+
+.has-rank-col td:nth-child(2),
+.has-rank-col th:nth-child(2) {
+  text-align: left;
+}
+
+.standings-leader {
+  background: var(--gold) !important;
+}
+
+.standings-cs {
+  background: var(--cs) !important;
+}
+
+.magic-pennant {
+  display: inline-block;
+  min-width: 3.2rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  background: #c1121f;
+  color: #fff;
+}
+
+.stats-table .remain-self {
+  background: #f0f2f1 !important;
+  color: #9aa7a1;
+}
+
+.team-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.team-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex: 0 0 auto;
+}
+
+.team-abbr {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.league-toggle .btn {
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .site-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+  }
+
+  .league-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 1rem 0.8rem;
+  }
+}
