@@ -6,7 +6,7 @@ on:
       timezone: "Asia/Tokyo"
     - cron: "*/15 18-23 * 3-11 1-5"
       timezone: "Asia/Tokyo"
-    - cron: "*/15 13-23 * 3-11 6,7"
+    - cron: "*/15 13-23 * 3-11 0,6"
       timezone: "Asia/Tokyo"
   push:
     branches: [main, master]
