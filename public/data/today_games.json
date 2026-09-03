@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-03",
+  "games": [
+    {
+      "date": "2026-09-03",
+      "ateam": "ヤ",
+      "bteam": "神",
+      "ascore": "3",
+      "bscore": "6",
+      "status": "試合中",
+      "venue": "神宮",
+      "note": "5回裏",
+      "a_delta": null,
+      "b_delta": null
+    },
+    {
+      "date": "2026-09-03",
+      "ateam": "中",
+      "bteam": "広",
+      "ascore": "2",
+      "bscore": "3",
+      "status": "試合中",
+      "venue": "バンテリンドーム",
+      "note": "5回裏",
+      "a_delta": null,
+      "b_delta": null
+    }
+  ]
+}

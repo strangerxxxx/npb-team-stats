@@ -8,4 +8,4 @@ __pycache__/
 *.log
 sim/target/
 data/
-public/data/
+.vercel/
