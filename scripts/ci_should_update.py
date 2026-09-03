@@ -4,28 +4,27 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 JST = ZoneInfo("Asia/Tokyo")
 SEASON_START = (3, 25)
 SEASON_END = (11, 15)
-# 21:00〜27:00 JST（翌 3:00 を含む）
-HOURLY_START = 21
-OVERNIGHT_END = 3
+# 毎日 7:00、平日 18:00〜23:59、土日 13:00〜23:59（JST）
+MORNING_HOUR = 7
+WEEKDAY_START = 18
+WEEKEND_START = 13
+WINDOW_END = 23
 
 
-def season_day(now: datetime) -> datetime.date:
-    """0:00〜3:00 は前日夜の延長とみなす。"""
+def in_schedule_window(now: datetime) -> bool:
     local = now.astimezone(JST)
-    if local.hour <= OVERNIGHT_END:
-        return (local - timedelta(days=1)).date()
-    return local.date()
-
-
-def in_hourly_window(now: datetime) -> bool:
-    hour = now.astimezone(JST).hour
-    return hour >= HOURLY_START or hour <= OVERNIGHT_END
+    hour = local.hour
+    if hour == MORNING_HOUR:
+        return True
+    weekday = local.weekday()  # Mon=0 … Sun=6
+    start = WEEKDAY_START if weekday < 5 else WEEKEND_START
+    return start <= hour <= WINDOW_END
 
 
 def in_season_dates(day) -> bool:
@@ -36,9 +35,9 @@ def in_season_dates(day) -> bool:
 
 def should_update(now: datetime | None = None) -> bool:
     current = now.astimezone(JST) if now is not None else datetime.now(JST)
-    if not in_hourly_window(current):
+    if not in_schedule_window(current):
         return False
-    return in_season_dates(season_day(current))
+    return in_season_dates(current.date())
 
 
 def main() -> None:
@@ -55,7 +54,7 @@ def main() -> None:
         sys.stdout.write(line)
     if require_window and not ok:
         print(
-            f"スキップ: {now.isoformat()} は 3/25〜11/15 の 21:00〜27:00 JST の外です。",
+            f"スキップ: {now.isoformat()} は 3/25〜11/15 の更新時間帯の外です。",
             file=sys.stderr,
         )
 

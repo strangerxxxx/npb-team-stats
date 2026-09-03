@@ -1,4 +1,4 @@
-name: Update and deploy Pages
+name: Update and deploy
 
 on:
   schedule:
@@ -31,19 +31,10 @@ jobs:
           REQUIRE_SEASON_WINDOW: ${{ github.event_name == 'schedule' }}
         run: python scripts/ci_should_update.py
 
-  deploy:
+  data:
     needs: gate
     if: needs.gate.outputs.should_update == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      BASE_PATH: /${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v4
 
@@ -51,11 +42,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -69,10 +55,41 @@ jobs:
       - name: Scrape and compute
         run: python scripts/scrape.py && python scripts/compute.py
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-data
+          path: public/data
+          retention-days: 1
+
+  pages:
+    needs: data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: public-data
+          path: public/data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
       - name: Install npm dependencies
         run: npm ci
 
       - name: Build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
 
       - uses: actions/configure-pages@v5
@@ -83,3 +100,39 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  vercel:
+    needs: data
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: public-data
+          path: public/data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@43
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production
+
+      - name: Build
+        run: vercel build --prod
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --yes
