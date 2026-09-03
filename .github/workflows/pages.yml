@@ -103,36 +103,47 @@ jobs:
 
   vercel:
     needs: data
-    if: ${{ secrets.VERCEL_TOKEN != '' }}
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Skip when Vercel is not configured
+        if: env.VERCEL_TOKEN == ''
+        run: echo "VERCEL_TOKEN が未設定のためスキップします。"
 
-      - uses: actions/download-artifact@v4
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/checkout@v4
+
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/download-artifact@v4
         with:
           name: public-data
           path: public/data
 
-      - uses: actions/setup-node@v4
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
 
       - name: Install npm dependencies
+        if: env.VERCEL_TOKEN != ''
         run: npm ci
 
       - name: Install Vercel CLI
+        if: env.VERCEL_TOKEN != ''
         run: npm install -g vercel@43
 
       - name: Pull Vercel environment
+        if: env.VERCEL_TOKEN != ''
         run: vercel pull --yes --environment=production
 
       - name: Build
+        if: env.VERCEL_TOKEN != ''
         run: vercel build --prod
 
       - name: Deploy
+        if: env.VERCEL_TOKEN != ''
         run: vercel deploy --prebuilt --prod --yes
