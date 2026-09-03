@@ -48,7 +48,3 @@ python scripts/compute.py --year 2025
 リポジトリの Settings → Pages → Source を **GitHub Actions** にしてください。公開 URL は `https://<user>.github.io/<repo>/` です。
 
 Actions が試合結果の取得・計算・デプロイまで行います。
-
-- 期間: 3/25〜11/15
-- 時刻: 21:00〜27:00 JST（翌 3:00 まで）の毎時
-- `main` / `master` への push と手動実行（Run workflow）でもデプロイします

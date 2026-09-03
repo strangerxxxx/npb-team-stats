@@ -23,6 +23,7 @@ from config import (
     prev_rank_path,
     resolve_year,
     scores_path,
+    today_games_path,
 )
 from ranking import rank_league
 from teams import CENTRAL, PACIFIC, TEAMNAMES
@@ -445,6 +446,50 @@ def write_meta(year: int, prev_ranks: list[int]) -> None:
     )
 
 
+def attach_today_deltas(
+    daily: list[dict],
+    deltas: dict[tuple[str, frozenset[str]], dict[str, float]],
+) -> list[dict]:
+    rows: list[dict] = []
+    for game in daily:
+        row = dict(game)
+        key = (game["date"], frozenset((game["ateam"], game["bteam"])))
+        change = deltas.get(key, {})
+        if game.get("status") == "試合終了" and change:
+            row["a_delta"] = round(change.get(game["ateam"], 0.0), 2)
+            row["b_delta"] = round(change.get(game["bteam"], 0.0), 2)
+        else:
+            row["a_delta"] = None
+            row["b_delta"] = None
+        rows.append(row)
+    return rows
+
+
+def write_today_games(
+    year: int,
+    deltas: dict[tuple[str, frozenset[str]], dict[str, float]],
+) -> None:
+    source = today_games_path(year)
+    if not source.exists():
+        (OUTPUT_DIR / "today_games.json").write_text(
+            json.dumps({"date": None, "games": []}, ensure_ascii=False, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+        return
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    games = attach_today_deltas(payload.get("games") or [], deltas)
+    (OUTPUT_DIR / "today_games.json").write_text(
+        json.dumps(
+            {"date": payload.get("date"), "games": games},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def load_completed_games(path: Path) -> list[tuple[str, str, str, str, str]]:
     games: list[tuple[str, str, str, str, str]] = []
     with open(path, encoding="utf-8") as f:
@@ -469,6 +514,7 @@ def apply_games(
     dict[str, Player],
     dict[str, int],
     dict[str, list[tuple[str, float]]],
+    dict[tuple[str, frozenset[str]], dict[str, float]],
 ]:
     scores: list[list[int]] = [[0, 0, 0] for _ in range(12)]
     games_remain = initial_games_remain()
@@ -476,12 +522,15 @@ def apply_games(
     teams_dict: dict[str, Player] = {name: Player(name) for name in TEAMNAMES}
     teamdict: dict[str, int] = {name: i for i, name in enumerate(TEAMNAMES)}
     date_updates: defaultdict[str, list[tuple[str, float]]] = defaultdict(list)
+    deltas: dict[tuple[str, frozenset[str]], dict[str, float]] = {}
 
     for date, ateam, ascore, bteam, bscore in games:
         if ateam not in teamdict or bteam not in teamdict:
             continue
 
         ia, ib = teamdict[ateam], teamdict[bteam]
+        before_a = teams_dict[ateam].rating
+        before_b = teams_dict[bteam].rating
         if ascore == bscore:
             teams_dict[ateam], teams_dict[bteam] = update_rating_draw(
                 teams_dict[ateam], teams_dict[bteam]
@@ -499,12 +548,16 @@ def apply_games(
             scores[teamdict[loser]][1] += 1
             h2h[teamdict[winner]][teamdict[loser]] += 1
 
+        deltas[(date, frozenset((ateam, bteam)))] = {
+            ateam: teams_dict[ateam].rating - before_a,
+            bteam: teams_dict[bteam].rating - before_b,
+        }
         date_updates[date].append((ateam, teams_dict[ateam].rating))
         date_updates[date].append((bteam, teams_dict[bteam].rating))
         games_remain[ia][ib] = max(0, games_remain[ia][ib] - 1)
         games_remain[ib][ia] = max(0, games_remain[ib][ia] - 1)
 
-    return scores, games_remain, h2h, teams_dict, teamdict, date_updates
+    return scores, games_remain, h2h, teams_dict, teamdict, date_updates, deltas
 
 
 def compute_year(year: int, *, allow_fallback: bool = False) -> None:
@@ -521,7 +574,7 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
         )
 
     prev_ranks = load_prev_ranks(year)
-    scores, games_remain, h2h, teams_dict, teamdict, date_updates = apply_games(
+    scores, games_remain, h2h, teams_dict, teamdict, date_updates, deltas = apply_games(
         load_completed_games(scores_file)
     )
 
@@ -551,6 +604,7 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
     ranks = simulate_ranks(h2h, prev_ranks, matchups, SIMULATION_COUNT)
     write_victory_probs(ranks, SIMULATION_COUNT)
     write_meta(year, prev_ranks)
+    write_today_games(year, deltas)
     print(f"{year}年の結果を {OUTPUT_DIR} に書き出しました。")
 
 

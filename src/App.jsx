@@ -1,6 +1,7 @@
 import "./App.css";
 import { lazy, Suspense, useMemo } from "react";
 import Standings from "./components/Standings";
+import TodayGames from "./components/TodayGames";
 import CsvTable from "./components/CsvTable";
 import { Container, Row, Col } from "react-bootstrap";
 import { teamOrder, useStandings } from "./hooks/useStandings";
@@ -51,6 +52,7 @@ function App() {
       </header>
 
       <Container className="page-body">
+        <TodayGames />
         <section className="panel">
           <h2>順位表</h2>
           <p className="panel-lead">

@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pathsetup  # noqa: F401
 from compute import (
     Player,
+    attach_today_deltas,
     apply_games,
     format_win_pct,
     games_behind,
@@ -122,7 +123,7 @@ class LoadCompletedGamesTest(unittest.TestCase):
 
 class ApplyGamesTest(unittest.TestCase):
     def test_win_updates_record_h2h_remain_and_rating(self):
-        scores, remain, h2h, teams, _teamdict, updates = apply_games(
+        scores, remain, h2h, teams, _teamdict, updates, deltas = apply_games(
             [("2026-03-26", "神", "5", "巨", "3")]
         )
         self.assertEqual(scores[TEAMNAMES.index("神")], [1, 0, 0])
@@ -139,9 +140,12 @@ class ApplyGamesTest(unittest.TestCase):
         self.assertEqual(
             [name for name, _rating in updates["2026-03-26"]], ["神", "巨"]
         )
+        change = deltas[("2026-03-26", frozenset(("神", "巨")))]
+        self.assertAlmostEqual(change["神"], 8)
+        self.assertAlmostEqual(change["巨"], -8)
 
     def test_draw_counts_as_draw_and_keeps_equal_ratings(self):
-        scores, remain, h2h, teams, _teamdict, _updates = apply_games(
+        scores, remain, h2h, teams, _teamdict, _updates, _deltas = apply_games(
             [("2026-03-26", "ソ", "2", "日", "2")]
         )
         self.assertEqual(scores[TEAMNAMES.index("ソ")], [0, 0, 1])
@@ -151,7 +155,7 @@ class ApplyGamesTest(unittest.TestCase):
         self.assertEqual(remain[8][11], INTRA_LEAGUE_GAMES - 1)
 
     def test_skips_unknown_teams(self):
-        scores, _remain, h2h, teams, _teamdict, updates = apply_games(
+        scores, _remain, h2h, teams, _teamdict, updates, _deltas = apply_games(
             [("2026-03-26", "神", "1", "??", "0")]
         )
         self.assertEqual(scores[0], [0, 0, 0])
@@ -160,11 +164,52 @@ class ApplyGamesTest(unittest.TestCase):
         self.assertAlmostEqual(teams["神"].rating, INITIAL_RATING)
 
     def test_interleague_game_decrements_the_three_game_slot(self):
-        _scores, remain, _h2h, _teams, _teamdict, _updates = apply_games(
+        _scores, remain, _h2h, _teams, _teamdict, _updates, _deltas = apply_games(
             [("2026-06-01", "神", "3", "ソ", "1")]
         )
         self.assertEqual(remain[0][8], INTERLEAGUE_GAMES - 1)
         self.assertEqual(remain[8][0], INTERLEAGUE_GAMES - 1)
+
+
+class AttachTodayDeltasTest(unittest.TestCase):
+    def test_adds_deltas_only_for_finished_games(self):
+        _scores, _remain, _h2h, _teams, _teamdict, _updates, deltas = apply_games(
+            [("2026-09-01", "巨", "4", "デ", "3")]
+        )
+        rows = attach_today_deltas(
+            [
+                {
+                    "date": "2026-09-01",
+                    "ateam": "巨",
+                    "bteam": "デ",
+                    "ascore": "4",
+                    "bscore": "3",
+                    "status": "試合終了",
+                },
+                {
+                    "date": "2026-09-01",
+                    "ateam": "ヤ",
+                    "bteam": "神",
+                    "ascore": "2",
+                    "bscore": "1",
+                    "status": "試合中",
+                },
+                {
+                    "date": "2026-09-01",
+                    "ateam": "中",
+                    "bteam": "広",
+                    "ascore": None,
+                    "bscore": None,
+                    "status": "試合前",
+                },
+            ],
+            deltas,
+        )
+        self.assertEqual(rows[0]["a_delta"], 8.0)
+        self.assertEqual(rows[0]["b_delta"], -8.0)
+        self.assertIsNone(rows[1]["a_delta"])
+        self.assertIsNone(rows[1]["b_delta"])
+        self.assertIsNone(rows[2]["a_delta"])
 
 
 class FileHasCompletedGamesTest(unittest.TestCase):

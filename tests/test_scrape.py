@@ -4,7 +4,13 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 import pathsetup  # noqa: F401
-from scrape import parse_daily_html, parse_schedule_html, team_abbr_from_img, upsert_games
+from scrape import (
+    finished_game_rows,
+    parse_daily_html,
+    parse_schedule_html,
+    team_abbr_from_img,
+    upsert_games,
+)
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "schedule.html"
 DAILY_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "daily_games.html"
@@ -77,10 +83,56 @@ class ParseScheduleHtmlTest(unittest.TestCase):
 
 
 class ParseDailyHtmlTest(unittest.TestCase):
-    def test_keeps_only_finished_games(self):
+    def test_reads_all_cards_and_keeps_finished_rows_for_scores(self):
         html = DAILY_FIXTURE.read_text(encoding="utf-8")
         games = parse_daily_html(html, 2026)
-        self.assertEqual(games, [("2026-09-01", "巨", "4", "デ", "3")])
+        by_teams = {(g["ateam"], g["bteam"]): g for g in games}
+        self.assertEqual(set(by_teams), {("巨", "デ"), ("ヤ", "神"), ("中", "広"), ("日", "ソ")})
+        finished = by_teams["巨", "デ"]
+        self.assertEqual(finished["status"], "試合終了")
+        self.assertEqual(finished["ascore"], "4")
+        self.assertEqual(finished["bscore"], "3")
+        self.assertEqual(finished["venue"], "京セラD大阪")
+        live = by_teams["ヤ", "神"]
+        self.assertEqual(live["status"], "試合中")
+        self.assertEqual(live["note"], "5回表")
+        cancelled = by_teams["中", "広"]
+        self.assertEqual(cancelled["status"], "試合中止")
+        scheduled = by_teams["日", "ソ"]
+        self.assertEqual(scheduled["status"], "試合前")
+        self.assertEqual(scheduled["note"], "18:00")
+        self.assertEqual(scheduled["date"], "2026-09-02")
+        self.assertEqual(scheduled["venue"], "エスコンＦ")
+        self.assertEqual(live["venue"], "神宮")
+        self.assertEqual(
+            finished_game_rows(games),
+            [("2026-09-01", "巨", "4", "デ", "3")],
+        )
+
+    def test_parses_japanese_start_time(self):
+        html = """
+        <div id="game_score">
+          <a href="/scores/2026/0903/s-t-21/" class="link_block">
+            <table>
+              <tr>
+                <td class="team1"><img src="/img/common/logo/2026/logo_s_m.gif" alt=""></td>
+                <td class="score"></td>
+                <td>-</td>
+                <td class="score"></td>
+                <td class="team2"><img src="/img/common/logo/2026/logo_t_m.gif" alt=""></td>
+              </tr>
+              <tr>
+                <td class="state" colspan="5">（神　宮）18時00分</td>
+              </tr>
+            </table>
+          </a>
+        </div>
+        """
+        games = parse_daily_html(html, 2026)
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["status"], "試合前")
+        self.assertEqual(games[0]["note"], "18:00")
+        self.assertEqual(games[0]["venue"], "神宮")
 
     def test_ignores_other_years(self):
         html = DAILY_FIXTURE.read_text(encoding="utf-8")

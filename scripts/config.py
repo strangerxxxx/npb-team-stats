@@ -17,6 +17,10 @@ def scores_path(year: int) -> Path:
     return SCORES_DIR / f"scores_{year}.csv"
 
 
+def today_games_path(year: int) -> Path:
+    return SCORES_DIR / f"today_{year}.json"
+
+
 def prev_rank_path(year: int) -> Path:
     return SCORES_DIR / f"prev_rank_{year}.json"
 
