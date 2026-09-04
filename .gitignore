@@ -9,3 +9,4 @@ __pycache__/
 sim/target/
 data/
 .vercel/
+.aws-sam/

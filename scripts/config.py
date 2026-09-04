@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from pathlib import Path
 
@@ -9,20 +10,28 @@ INTRA_LEAGUE_GAMES = 25
 INTERLEAGUE_GAMES = 3
 
 ROOT = Path(__file__).resolve().parent.parent
-SCORES_DIR = ROOT / "data" / "scores"
-OUTPUT_DIR = ROOT / "public" / "data"
+
+
+def scores_dir() -> Path:
+    raw = os.environ.get("NPB_SCORES_DIR")
+    return Path(raw) if raw else ROOT / "data" / "scores"
+
+
+def output_dir() -> Path:
+    raw = os.environ.get("NPB_OUTPUT_DIR")
+    return Path(raw) if raw else ROOT / "public" / "data"
 
 
 def scores_path(year: int) -> Path:
-    return SCORES_DIR / f"scores_{year}.csv"
+    return scores_dir() / f"scores_{year}.csv"
 
 
 def today_games_path(year: int) -> Path:
-    return SCORES_DIR / f"today_{year}.json"
+    return scores_dir() / f"today_{year}.json"
 
 
 def prev_rank_path(year: int) -> Path:
-    return SCORES_DIR / f"prev_rank_{year}.json"
+    return scores_dir() / f"prev_rank_{year}.json"
 
 
 def file_has_completed_games(path: Path) -> bool:

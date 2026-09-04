@@ -1,6 +1,10 @@
 import Papa from "papaparse";
 
 export function dataUrl(filename) {
+  const remote = import.meta.env.VITE_DATA_BASE_URL;
+  if (remote) {
+    return `${String(remote).replace(/\/+$/, "")}/${filename}`;
+  }
   return `${import.meta.env.BASE_URL}data/${filename}`;
 }
 

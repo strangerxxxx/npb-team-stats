@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from datetime import date as real_date
@@ -7,6 +8,7 @@ from unittest.mock import patch
 import pathsetup  # noqa: F401
 from compute import (
     Player,
+    _ensure_rust_sim,
     attach_today_deltas,
     apply_games,
     format_win_pct,
@@ -240,6 +242,21 @@ class ResolveYearTest(unittest.TestCase):
         mock_date.today.return_value = real_date(2026, 4, 1)
         has_games.side_effect = lambda year: year == 2026
         self.assertEqual(resolve_year(), 2026)
+
+
+class SimBinaryTest(unittest.TestCase):
+    def test_env_override_returns_existing_file(self):
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            path = handle.name
+        try:
+            with patch.dict(os.environ, {"NPB_SIM_BIN": path}):
+                self.assertEqual(_ensure_rust_sim(), Path(path))
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_missing_override_skips_cargo(self):
+        with patch.dict(os.environ, {"NPB_SIM_BIN": str(Path(tempfile.gettempdir()) / "no-npb-sim")}):
+            self.assertIsNone(_ensure_rust_sim())
 
 
 if __name__ == "__main__":

@@ -17,9 +17,9 @@ from config import (
     INTERLEAGUE_GAMES,
     INTRA_LEAGUE_GAMES,
     K_FACTOR,
-    OUTPUT_DIR,
     SIMULATION_COUNT,
     has_completed_games,
+    output_dir,
     prev_rank_path,
     resolve_year,
     scores_path,
@@ -95,7 +95,7 @@ def initial_games_remain() -> list[list[int]]:
 
 
 def out_path(name: str) -> Path:
-    return OUTPUT_DIR / name
+    return output_dir() / name
 
 
 def write_rating_csvs(
@@ -311,6 +311,9 @@ def remaining_matchups(
 
 
 def _sim_binary() -> Path:
+    override = os.environ.get("NPB_SIM_BIN")
+    if override:
+        return Path(override)
     root = Path(__file__).resolve().parent.parent
     name = "npb_sim.exe" if os.name == "nt" else "npb_sim"
     return root / "sim" / "target" / "release" / name
@@ -318,6 +321,16 @@ def _sim_binary() -> Path:
 
 def _ensure_rust_sim() -> Path | None:
     """Release ビルド済みのシミュレーションバイナリを返す。必要なら cargo で作る。"""
+    override = os.environ.get("NPB_SIM_BIN")
+    if override:
+        exe = Path(override)
+        if exe.is_file():
+            return exe
+        print(
+            f"NPB_SIM_BIN={override} が見つからないため、Python実装を使います。",
+            file=sys.stderr,
+        )
+        return None
     root = Path(__file__).resolve().parent.parent
     manifest = root / "sim" / "Cargo.toml"
     src = root / "sim" / "src" / "main.rs"
@@ -440,7 +453,7 @@ def write_meta(year: int, prev_ranks: list[int]) -> None:
         "isPreviousSeason": year < datetime.date.today().year,
         "prevRanks": {name: prev_ranks[i] for i, name in enumerate(TEAMNAMES)},
     }
-    (OUTPUT_DIR / "meta.json").write_text(
+    (output_dir() / "meta.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -471,7 +484,7 @@ def write_today_games(
 ) -> None:
     source = today_games_path(year)
     if not source.exists():
-        (OUTPUT_DIR / "today_games.json").write_text(
+        (output_dir() / "today_games.json").write_text(
             json.dumps({"date": None, "games": []}, ensure_ascii=False, indent=2)
             + "\n",
             encoding="utf-8",
@@ -479,7 +492,7 @@ def write_today_games(
         return
     payload = json.loads(source.read_text(encoding="utf-8"))
     games = attach_today_deltas(payload.get("games") or [], deltas)
-    (OUTPUT_DIR / "today_games.json").write_text(
+    (output_dir() / "today_games.json").write_text(
         json.dumps(
             {"date": payload.get("date"), "games": games},
             ensure_ascii=False,
@@ -561,7 +574,7 @@ def apply_games(
 
 
 def compute_year(year: int, *, allow_fallback: bool = False) -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir().mkdir(parents=True, exist_ok=True)
     scores_file = scores_path(year)
     if not scores_file.exists() or not has_completed_games(year):
         prev = year - 1
@@ -605,7 +618,7 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
     write_victory_probs(ranks, SIMULATION_COUNT)
     write_meta(year, prev_ranks)
     write_today_games(year, deltas)
-    print(f"{year}年の結果を {OUTPUT_DIR} に書き出しました。")
+    print(f"{year}年の結果を {output_dir()} に書き出しました。")
 
 
 def main() -> None:

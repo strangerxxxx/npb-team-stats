@@ -1,0 +1,14 @@
+.git
+.aws-sam
+.vercel
+node_modules
+dist
+data
+public
+src
+tests
+sim/target
+__pycache__
+*.pyc
+*.md
+.github

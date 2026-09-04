@@ -1,13 +1,6 @@
-name: Update and deploy
+name: Deploy frontend
 
 on:
-  schedule:
-    - cron: "0 7 * 3-11 *"
-      timezone: "Asia/Tokyo"
-    - cron: "*/15 18-23 * 3-11 1-5"
-      timezone: "Asia/Tokyo"
-    - cron: "*/15 13-23 * 3-11 0,6"
-      timezone: "Asia/Tokyo"
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -17,52 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      should_update: ${{ steps.season.outputs.should_update }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - id: season
-        env:
-          REQUIRE_SEASON_WINDOW: ${{ github.event_name == 'schedule' }}
-        run: python scripts/ci_should_update.py
-
-  data:
-    needs: gate
-    if: needs.gate.outputs.should_update == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: sim
-
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Scrape and compute
-        run: python scripts/scrape.py && python scripts/compute.py
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: public-data
-          path: public/data
-          retention-days: 1
-
   pages:
-    needs: data
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,11 +21,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: public-data
-          path: public/data
 
       - uses: actions/setup-node@v4
         with:
@@ -90,6 +33,7 @@ jobs:
       - name: Build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_DATA_BASE_URL: ${{ secrets.VITE_DATA_BASE_URL }}
         run: npm run build
 
       - uses: actions/configure-pages@v5
@@ -102,7 +46,6 @@ jobs:
         uses: actions/deploy-pages@v4
 
   vercel:
-    needs: data
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -115,12 +58,6 @@ jobs:
 
       - if: env.VERCEL_TOKEN != ''
         uses: actions/checkout@v4
-
-      - if: env.VERCEL_TOKEN != ''
-        uses: actions/download-artifact@v4
-        with:
-          name: public-data
-          path: public/data
 
       - if: env.VERCEL_TOKEN != ''
         uses: actions/setup-node@v4
@@ -142,6 +79,8 @@ jobs:
 
       - name: Build
         if: env.VERCEL_TOKEN != ''
+        env:
+          VITE_DATA_BASE_URL: ${{ secrets.VITE_DATA_BASE_URL }}
         run: vercel build --prod
 
       - name: Deploy

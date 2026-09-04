@@ -11,10 +11,10 @@ from datetime import date
 import requests
 from bs4 import BeautifulSoup
 from config import (
-    SCORES_DIR,
     has_completed_games,
     prev_rank_path,
     resolve_year,
+    scores_dir,
     scores_path,
     today_games_path,
 )
@@ -255,7 +255,7 @@ def upsert_games(
 
 
 def scrape_year(year: int) -> tuple[list[str], dict[str, int]]:
-    SCORES_DIR.mkdir(parents=True, exist_ok=True)
+    scores_dir().mkdir(parents=True, exist_ok=True)
     games: list[tuple[str, str, str, str, str]] = []
     prev_ranks: dict[str, int] = {}
     # 開幕が3月の年もあるため 3〜11 月を対象にする
@@ -298,6 +298,31 @@ def write_prev_ranks(year: int, prev_ranks: dict[str, int]) -> None:
     print(f"前年度順位を書き出しました: {path}")
 
 
+def run_scrape(year: int | None = None) -> int:
+    """試合結果を取得して scores CSV に書き出す。対象年度を返す。"""
+    target = year if year is not None else date.today().year
+    lines, prev_ranks = scrape_year(target)
+    out_path = scores_path(target)
+    if not lines:
+        if year is None and out_path.exists() and not has_completed_games(target):
+            out_path.unlink()
+        display_year = resolve_year()
+        if display_year != target:
+            print(
+                f"{target}年は開幕前か試合がないため、表示・計算は {display_year} 年の結果を使います。"
+            )
+        else:
+            print(f"{target}年の試合結果は見つかりませんでした。")
+        write_prev_ranks(target, prev_ranks)
+        return target
+
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
+        f.writelines(lines)
+    write_prev_ranks(target, prev_ranks)
+    print(f"{target}年の試合を {len(lines)} 件書き出しました: {out_path}")
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NPBの試合結果を取得する")
     parser.add_argument(
@@ -307,26 +332,7 @@ def main() -> None:
         help="対象年度（省略時は実行年。試合がなければファイルは作らない）",
     )
     args = parser.parse_args()
-    year = args.year if args.year is not None else date.today().year
-    lines, prev_ranks = scrape_year(year)
-    out_path = scores_path(year)
-    if not lines:
-        if args.year is None and out_path.exists() and not has_completed_games(year):
-            out_path.unlink()
-        display_year = resolve_year()
-        if display_year != year:
-            print(
-                f"{year}年は開幕前か試合がないため、表示・計算は {display_year} 年の結果を使います。"
-            )
-        else:
-            print(f"{year}年の試合結果は見つかりませんでした。")
-        write_prev_ranks(year, prev_ranks)
-        return
-
-    with open(out_path, "w", encoding="utf-8", newline="") as f:
-        f.writelines(lines)
-    write_prev_ranks(year, prev_ranks)
-    print(f"{year}年の試合を {len(lines)} 件書き出しました: {out_path}")
+    run_scrape(args.year)
 
 
 if __name__ == "__main__":
