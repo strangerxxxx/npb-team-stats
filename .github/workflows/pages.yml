@@ -75,14 +75,14 @@ jobs:
 
       - name: Pull Vercel environment
         if: env.VERCEL_TOKEN != ''
-        run: vercel pull --yes --environment=production
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build
         if: env.VERCEL_TOKEN != ''
         env:
           VITE_DATA_BASE_URL: ${{ secrets.VITE_DATA_BASE_URL }}
-        run: vercel build --prod
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy
         if: env.VERCEL_TOKEN != ''
-        run: vercel deploy --prebuilt --prod --yes
+        run: vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN"
