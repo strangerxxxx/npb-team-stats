@@ -118,7 +118,7 @@ describe("TodayGames", () => {
     expect(screen.getByText("+8.12")).toBeInTheDocument();
     expect(screen.getByText("-8.12")).toBeInTheDocument();
     expect(screen.getByText("1508.00")).toBeInTheDocument();
-    expect(screen.getByText(".500")).toBeInTheDocument();
+    expect(screen.getByText("勝率50.0%")).toBeInTheDocument();
     expect(screen.getByText("5回表")).toBeInTheDocument();
     expect(screen.getByText("試合中止")).toBeInTheDocument();
     expect(screen.getByText("18:00")).toBeInTheDocument();

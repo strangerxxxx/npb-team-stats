@@ -262,6 +262,7 @@ h3 {
 .today-winpct {
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .today-scoreboard {

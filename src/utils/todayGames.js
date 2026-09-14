@@ -15,6 +15,13 @@ export function formatRating(value) {
   return Number(value).toFixed(2);
 }
 
+export function formatWinPct(value) {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `勝率${(n * 100).toFixed(1)}%`;
+}
+
 export function formatGameDate(iso) {
   if (!iso) return "";
   const match = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);

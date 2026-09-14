@@ -5,6 +5,7 @@ import {
   formatGameDate,
   formatRating,
   formatRatingDelta,
+  formatWinPct,
   statusText,
 } from "../utils/todayGames";
 
@@ -26,10 +27,11 @@ function Score({ value, winner }) {
 
 function SideStats({ rating, winPct, delta, finished }) {
   const ratingText = formatRating(rating);
+  const winPctText = formatWinPct(winPct);
   return (
     <div className="today-side-stats">
       {ratingText ? <span className="today-rating">{ratingText}</span> : null}
-      {winPct ? <span className="today-winpct">{winPct}</span> : null}
+      {winPctText ? <span className="today-winpct">{winPctText}</span> : null}
       {finished ? <Delta value={delta} /> : null}
     </div>
   );

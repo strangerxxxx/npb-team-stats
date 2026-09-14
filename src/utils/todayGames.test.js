@@ -3,6 +3,7 @@ import {
   formatGameDate,
   formatRating,
   formatRatingDelta,
+  formatWinPct,
   statusText,
 } from "./todayGames";
 
@@ -10,6 +11,15 @@ describe("formatRating", () => {
   it("formats ratings to two decimals", () => {
     expect(formatRating(1543.371)).toBe("1543.37");
     expect(formatRating(null)).toBe("");
+  });
+});
+
+describe("formatWinPct", () => {
+  it("formats NPB win pct as a percentage label", () => {
+    expect(formatWinPct(".448")).toBe("勝率44.8%");
+    expect(formatWinPct("1.000")).toBe("勝率100.0%");
+    expect(formatWinPct(".000")).toBe("勝率0.0%");
+    expect(formatWinPct(null)).toBe("");
   });
 });
 describe("formatRatingDelta", () => {

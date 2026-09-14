@@ -18,6 +18,7 @@ from compute import (
     load_completed_games,
     pennant_magic,
     remaining_matchups,
+    snapshot_through,
     team_stats,
     update_rating,
     update_rating_draw,
@@ -240,12 +241,15 @@ class AttachTodayDeltasTest(unittest.TestCase):
 class WriteTodayGamesTest(unittest.TestCase):
     def test_writes_yesterday_results_and_team_stats(self):
         completed = [
+            ("2026-09-11", "神", "5", "中", "1"),
             ("2026-09-12", "神", "3", "巨", "2"),
             ("2026-09-13", "ヤ", "1", "中", "0"),
         ]
         scores, _remain, _h2h, teams, _teamdict, _updates, deltas = apply_games(
             completed
         )
+        prior_stats, _prior_deltas = snapshot_through(completed, "2026-09-11")
+        after_yesterday, _after_deltas = snapshot_through(completed, "2026-09-12")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "today_2026.json"
@@ -286,9 +290,16 @@ class WriteTodayGamesTest(unittest.TestCase):
             payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["date"], "2026-09-13")
         self.assertEqual(payload["games"][0]["a_win_pct"], "1.000")
+        yesterday_game = payload["yesterday"]["games"][0]
         self.assertEqual(payload["yesterday"]["date"], "2026-09-12")
-        self.assertEqual(payload["yesterday"]["games"][0]["ateam"], "神")
-        self.assertEqual(payload["yesterday"]["games"][0]["a_delta"], 8.0)
+        self.assertEqual(yesterday_game["ateam"], "神")
+        self.assertEqual(yesterday_game["a_rating"], prior_stats["神"]["rating"])
+        self.assertEqual(yesterday_game["a_win_pct"], prior_stats["神"]["win_pct"])
+        self.assertNotEqual(yesterday_game["a_rating"], after_yesterday["神"]["rating"])
+        self.assertEqual(
+            yesterday_game["a_delta"],
+            round(deltas[("2026-09-12", frozenset(("神", "巨")))]["神"], 2),
+        )
         self.assertEqual(team_stats(scores, teams)["ヤ"]["win_pct"], "1.000")
 
 

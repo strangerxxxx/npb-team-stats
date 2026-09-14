@@ -559,9 +559,10 @@ def write_today_games(
     yesterday_rows = finished_games_on(completed, yesterday)
     yesterday_games: list[dict] = []
     if yesterday_rows:
-        yesterday_stats, yesterday_deltas = snapshot_through(completed, yesterday)
+        prior_date = (current - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
+        yesterday_stats, _prior_deltas = snapshot_through(completed, prior_date)
         yesterday_games = attach_today_deltas(
-            yesterday_rows, yesterday_deltas, yesterday_stats
+            yesterday_rows, deltas, yesterday_stats
         )
 
     (output_dir() / "today_games.json").write_text(

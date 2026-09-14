@@ -64,10 +64,10 @@
         "note": "",
         "a_delta": 8.65,
         "b_delta": -8.65,
-        "a_rating": 1416.96,
-        "b_rating": 1427.82,
-        "a_win_pct": ".448",
-        "b_win_pct": ".417"
+        "a_rating": 1408.31,
+        "b_rating": 1436.46,
+        "a_win_pct": ".444",
+        "b_win_pct": ".420"
       },
       {
         "date": "2026-09-13",
@@ -80,10 +80,10 @@
         "note": "",
         "a_delta": 8.13,
         "b_delta": -8.13,
-        "a_rating": 1531.39,
-        "b_rating": 1520.61,
-        "a_win_pct": ".496",
-        "b_win_pct": ".551"
+        "a_rating": 1523.27,
+        "b_rating": 1528.74,
+        "a_win_pct": ".492",
+        "b_win_pct": ".556"
       },
       {
         "date": "2026-09-13",
@@ -96,10 +96,10 @@
         "note": "",
         "a_delta": -9.58,
         "b_delta": 9.58,
-        "a_rating": 1502.65,
-        "b_rating": 1452.38,
-        "a_win_pct": ".556",
-        "b_win_pct": ".426"
+        "a_rating": 1512.22,
+        "b_rating": 1442.81,
+        "a_win_pct": ".561",
+        "b_win_pct": ".422"
       },
       {
         "date": "2026-09-13",
@@ -112,10 +112,10 @@
         "note": "",
         "a_delta": -8.01,
         "b_delta": 8.01,
-        "a_rating": 1560.54,
-        "b_rating": 1576.06,
-        "a_win_pct": ".575",
-        "b_win_pct": ".562"
+        "a_rating": 1568.55,
+        "b_rating": 1568.05,
+        "a_win_pct": ".579",
+        "b_win_pct": ".559"
       },
       {
         "date": "2026-09-13",
@@ -128,10 +128,10 @@
         "note": "",
         "a_delta": 5.09,
         "b_delta": -5.09,
-        "a_rating": 1635.16,
-        "b_rating": 1492.71,
-        "a_win_pct": ".643",
-        "b_win_pct": ".467"
+        "a_rating": 1630.07,
+        "b_rating": 1497.8,
+        "a_win_pct": ".640",
+        "b_win_pct": ".471"
       }
     ]
   }
