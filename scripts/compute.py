@@ -459,42 +459,118 @@ def write_meta(year: int, prev_ranks: list[int]) -> None:
     )
 
 
+def team_stats(
+    scores: list[list[int]],
+    teams_dict: dict[str, Player],
+) -> dict[str, dict[str, float | str]]:
+    stats: dict[str, dict[str, float | str]] = {}
+    for i, name in enumerate(TEAMNAMES):
+        wins, losses, _draws = scores[i]
+        stats[name] = {
+            "rating": round(teams_dict[name].rating, 2),
+            "win_pct": format_win_pct(wins, losses),
+        }
+    return stats
+
+
+def snapshot_through(
+    games: list[tuple[str, str, str, str, str]],
+    through_date: str,
+) -> tuple[dict[str, dict[str, float | str]], dict[tuple[str, frozenset[str]], dict[str, float]]]:
+    subset = [game for game in games if game[0] <= through_date]
+    scores, _remain, _h2h, teams_dict, _teamdict, _updates, deltas = apply_games(subset)
+    return team_stats(scores, teams_dict), deltas
+
+
 def attach_today_deltas(
     daily: list[dict],
     deltas: dict[tuple[str, frozenset[str]], dict[str, float]],
+    stats: dict[str, dict[str, float | str]] | None = None,
 ) -> list[dict]:
+    snapshot = stats or {}
     rows: list[dict] = []
     for game in daily:
         row = dict(game)
-        key = (game["date"], frozenset((game["ateam"], game["bteam"])))
+        ateam, bteam = game["ateam"], game["bteam"]
+        key = (game["date"], frozenset((ateam, bteam)))
         change = deltas.get(key, {})
         if game.get("status") == "試合終了" and change:
-            row["a_delta"] = round(change.get(game["ateam"], 0.0), 2)
-            row["b_delta"] = round(change.get(game["bteam"], 0.0), 2)
+            row["a_delta"] = round(change.get(ateam, 0.0), 2)
+            row["b_delta"] = round(change.get(bteam, 0.0), 2)
         else:
             row["a_delta"] = None
             row["b_delta"] = None
+        a_stats = snapshot.get(ateam) or {}
+        b_stats = snapshot.get(bteam) or {}
+        row["a_rating"] = a_stats.get("rating")
+        row["b_rating"] = b_stats.get("rating")
+        row["a_win_pct"] = a_stats.get("win_pct")
+        row["b_win_pct"] = b_stats.get("win_pct")
         rows.append(row)
+    return rows
+
+
+def finished_games_on(
+    games: list[tuple[str, str, str, str, str]],
+    ymd: str,
+) -> list[dict]:
+    rows: list[dict] = []
+    for date, ateam, ascore, bteam, bscore in games:
+        if date != ymd:
+            continue
+        rows.append(
+            {
+                "date": date,
+                "ateam": ateam,
+                "bteam": bteam,
+                "ascore": ascore,
+                "bscore": bscore,
+                "status": "試合終了",
+                "venue": "",
+                "note": "",
+            }
+        )
     return rows
 
 
 def write_today_games(
     year: int,
     deltas: dict[tuple[str, frozenset[str]], dict[str, float]],
+    *,
+    scores: list[list[int]],
+    teams_dict: dict[str, Player],
+    completed: list[tuple[str, str, str, str, str]],
+    today: datetime.date | None = None,
 ) -> None:
+    current = today or datetime.date.today()
+    yesterday = (current - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    today_stats = team_stats(scores, teams_dict)
+
     source = today_games_path(year)
-    if not source.exists():
-        (output_dir() / "today_games.json").write_text(
-            json.dumps({"date": None, "games": []}, ensure_ascii=False, indent=2)
-            + "\n",
-            encoding="utf-8",
+    today_date: str | None = None
+    today_games: list[dict] = []
+    if source.exists():
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        today_date = payload.get("date")
+        today_games = attach_today_deltas(
+            payload.get("games") or [], deltas, today_stats
         )
-        return
-    payload = json.loads(source.read_text(encoding="utf-8"))
-    games = attach_today_deltas(payload.get("games") or [], deltas)
+
+    yesterday_rows = finished_games_on(completed, yesterday)
+    yesterday_games: list[dict] = []
+    if yesterday_rows:
+        yesterday_stats, yesterday_deltas = snapshot_through(completed, yesterday)
+        yesterday_games = attach_today_deltas(
+            yesterday_rows, yesterday_deltas, yesterday_stats
+        )
+
     (output_dir() / "today_games.json").write_text(
         json.dumps(
-            {"date": payload.get("date"), "games": games},
+            {
+                "date": today_date,
+                "games": today_games,
+                "yesterday": {"date": yesterday, "games": yesterday_games},
+            },
             ensure_ascii=False,
             indent=2,
         )
@@ -587,8 +663,9 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
         )
 
     prev_ranks = load_prev_ranks(year)
+    completed = load_completed_games(scores_file)
     scores, games_remain, h2h, teams_dict, teamdict, date_updates, deltas = apply_games(
-        load_completed_games(scores_file)
+        completed
     )
 
     if not date_updates:
@@ -617,7 +694,13 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
     ranks = simulate_ranks(h2h, prev_ranks, matchups, SIMULATION_COUNT)
     write_victory_probs(ranks, SIMULATION_COUNT)
     write_meta(year, prev_ranks)
-    write_today_games(year, deltas)
+    write_today_games(
+        year,
+        deltas,
+        scores=scores,
+        teams_dict=teams_dict,
+        completed=completed,
+    )
     print(f"{year}年の結果を {output_dir()} に書き出しました。")
 
 

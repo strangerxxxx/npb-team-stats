@@ -8,6 +8,13 @@ export function formatRatingDelta(value) {
   return "0.00";
 }
 
+export function formatRating(value) {
+  if (value == null || value === "" || !Number.isFinite(Number(value))) {
+    return "";
+  }
+  return Number(value).toFixed(2);
+}
+
 export function formatGameDate(iso) {
   if (!iso) return "";
   const match = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);

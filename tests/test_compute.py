@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -17,8 +18,10 @@ from compute import (
     load_completed_games,
     pennant_magic,
     remaining_matchups,
+    team_stats,
     update_rating,
     update_rating_draw,
+    write_today_games,
 )
 from config import (
     INITIAL_RATING,
@@ -212,6 +215,81 @@ class AttachTodayDeltasTest(unittest.TestCase):
         self.assertIsNone(rows[1]["a_delta"])
         self.assertIsNone(rows[1]["b_delta"])
         self.assertIsNone(rows[2]["a_delta"])
+        self.assertIsNone(rows[0]["a_rating"])
+        self.assertIsNone(rows[0]["a_win_pct"])
+
+    def test_attaches_rating_and_win_pct_from_snapshot(self):
+        rows = attach_today_deltas(
+            [
+                {
+                    "date": "2026-09-01",
+                    "ateam": "巨",
+                    "bteam": "デ",
+                    "ascore": "4",
+                    "bscore": "3",
+                    "status": "試合終了",
+                }
+            ],
+            {("2026-09-01", frozenset(("巨", "デ"))): {"巨": 8.0, "デ": -8.0}},
+            {"巨": {"rating": 1508.0, "win_pct": "1.000"}, "デ": {"rating": 1492.0, "win_pct": ".000"}},
+        )
+        self.assertEqual(rows[0]["a_rating"], 1508.0)
+        self.assertEqual(rows[0]["b_win_pct"], ".000")
+
+
+class WriteTodayGamesTest(unittest.TestCase):
+    def test_writes_yesterday_results_and_team_stats(self):
+        completed = [
+            ("2026-09-12", "神", "3", "巨", "2"),
+            ("2026-09-13", "ヤ", "1", "中", "0"),
+        ]
+        scores, _remain, _h2h, teams, _teamdict, _updates, deltas = apply_games(
+            completed
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "today_2026.json"
+            output = root / "public"
+            output.mkdir()
+            source.write_text(
+                json.dumps(
+                    {
+                        "date": "2026-09-13",
+                        "games": [
+                            {
+                                "date": "2026-09-13",
+                                "ateam": "ヤ",
+                                "bteam": "中",
+                                "ascore": "1",
+                                "bscore": "0",
+                                "status": "試合終了",
+                                "venue": "神宮",
+                                "note": "",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("compute.today_games_path", return_value=source),
+                patch("compute.output_dir", return_value=output),
+            ):
+                write_today_games(
+                    2026,
+                    deltas,
+                    scores=scores,
+                    teams_dict=teams,
+                    completed=completed,
+                    today=real_date(2026, 9, 13),
+                )
+            payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["date"], "2026-09-13")
+        self.assertEqual(payload["games"][0]["a_win_pct"], "1.000")
+        self.assertEqual(payload["yesterday"]["date"], "2026-09-12")
+        self.assertEqual(payload["yesterday"]["games"][0]["ateam"], "神")
+        self.assertEqual(payload["yesterday"]["games"][0]["a_delta"], 8.0)
+        self.assertEqual(team_stats(scores, teams)["ヤ"]["win_pct"], "1.000")
 
 
 class FileHasCompletedGamesTest(unittest.TestCase):

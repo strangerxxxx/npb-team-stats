@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   formatGameDate,
+  formatRating,
   formatRatingDelta,
   statusText,
 } from "./todayGames";
 
+describe("formatRating", () => {
+  it("formats ratings to two decimals", () => {
+    expect(formatRating(1543.371)).toBe("1543.37");
+    expect(formatRating(null)).toBe("");
+  });
+});
 describe("formatRatingDelta", () => {
   it("adds a plus sign for gains", () => {
     expect(formatRatingDelta(8.12)).toBe("+8.12");

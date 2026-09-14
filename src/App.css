@@ -241,6 +241,29 @@ h3 {
   text-align: right;
 }
 
+.today-side-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-side-right .today-side-stats {
+  justify-content: flex-end;
+}
+
+.today-rating {
+  font-weight: 700;
+  color: #2c3a33;
+}
+
+.today-winpct {
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .today-scoreboard {
   display: flex;
   align-items: baseline;
