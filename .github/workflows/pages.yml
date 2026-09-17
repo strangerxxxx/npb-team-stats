@@ -63,15 +63,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-
-      - name: Install npm dependencies
-        if: env.VERCEL_TOKEN != ''
-        run: npm ci
-
-      - name: Install Vercel CLI
-        if: env.VERCEL_TOKEN != ''
-        run: npm install -g vercel@59
 
       - name: Link Vercel project
         if: env.VERCEL_TOKEN != ''
@@ -79,16 +70,6 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
-      - name: Pull Vercel environment
-        if: env.VERCEL_TOKEN != ''
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
-
-      - name: Build
-        if: env.VERCEL_TOKEN != ''
-        env:
-          VITE_DATA_BASE_URL: ${{ secrets.VITE_DATA_BASE_URL }}
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
-
       - name: Deploy
         if: env.VERCEL_TOKEN != ''
-        run: vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
+        run: npx vercel@59 deploy --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
