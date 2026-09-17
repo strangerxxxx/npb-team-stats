@@ -1,5 +1,7 @@
-import "./App.css";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { lazy, Suspense, useMemo } from "react";
+import "./App.css";
 import Standings from "./components/Standings";
 import TodayGames from "./components/TodayGames";
 import CsvTable from "./components/CsvTable";
@@ -129,6 +131,8 @@ function App() {
           </Suspense>
         </section>
       </Container>
+      <Analytics />
+      <SpeedInsights />
     </div>
   );
 }

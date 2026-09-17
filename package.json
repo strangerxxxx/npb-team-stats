@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "bootstrap": "^5.3.8",
     "papaparse": "^5.7.0",
     "react": "^19.2.8",
@@ -12,9 +14,9 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.1.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^30.0.1",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
