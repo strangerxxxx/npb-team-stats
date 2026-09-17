@@ -1,6 +1,11 @@
 import os
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+JST = ZoneInfo("Asia/Tokyo")
+# 試合日の切り替え。これより前は前日扱い（深夜に終わった試合を残す）
+GAME_DAY_START_HOUR = 5
 
 K_FACTOR = 16
 SIMULATION_COUNT = 10**5
@@ -47,6 +52,20 @@ def file_has_completed_games(path: Path) -> bool:
 
 def has_completed_games(year: int) -> bool:
     return file_has_completed_games(scores_path(year))
+
+
+def game_date(now: datetime | None = None) -> date:
+    """表示・集計の基準日。JST 午前5時前は前日。"""
+    if now is None:
+        current = datetime.now(JST)
+    elif now.tzinfo is None:
+        current = now.replace(tzinfo=JST)
+    else:
+        current = now.astimezone(JST)
+    day = current.date()
+    if current.hour < GAME_DAY_START_HOUR:
+        return day - timedelta(days=1)
+    return day
 
 
 def resolve_year(requested: int | None = None) -> int:

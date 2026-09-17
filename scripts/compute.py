@@ -18,6 +18,7 @@ from config import (
     INTRA_LEAGUE_GAMES,
     K_FACTOR,
     SIMULATION_COUNT,
+    game_date,
     has_completed_games,
     output_dir,
     prev_rank_path,
@@ -542,7 +543,7 @@ def write_today_games(
     completed: list[tuple[str, str, str, str, str]],
     today: datetime.date | None = None,
 ) -> None:
-    current = today or datetime.date.today()
+    current = today or game_date()
     yesterday = (current - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     today_stats = team_stats(scores, teams_dict)
 

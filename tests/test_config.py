@@ -1,11 +1,16 @@
 import os
 import tempfile
 import unittest
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pathsetup  # noqa: F401
-from config import output_dir, scores_dir
+from config import game_date, output_dir, scores_dir
+
+JST = ZoneInfo("Asia/Tokyo")
+UTC = ZoneInfo("UTC")
 
 
 class ConfigPathTest(unittest.TestCase):
@@ -31,3 +36,32 @@ class ConfigPathTest(unittest.TestCase):
             ):
                 self.assertEqual(scores_dir(), scores)
                 self.assertEqual(output_dir(), public)
+
+
+class GameDateTest(unittest.TestCase):
+    def test_after_5am_jst_is_that_calendar_day(self):
+        self.assertEqual(
+            game_date(datetime(2026, 9, 17, 5, 0, tzinfo=JST)),
+            date(2026, 9, 17),
+        )
+        self.assertEqual(
+            game_date(datetime(2026, 9, 17, 8, 59, tzinfo=JST)),
+            date(2026, 9, 17),
+        )
+
+    def test_before_5am_jst_is_previous_calendar_day(self):
+        self.assertEqual(
+            game_date(datetime(2026, 9, 17, 4, 59, tzinfo=JST)),
+            date(2026, 9, 16),
+        )
+        self.assertEqual(
+            game_date(datetime(2026, 9, 17, 0, 0, tzinfo=JST)),
+            date(2026, 9, 16),
+        )
+
+    def test_utc_before_midnight_maps_to_jst_morning(self):
+        # 08:59 JST = 23:59 UTC previous day（Lambda の date.today() がずれる時間帯）
+        self.assertEqual(
+            game_date(datetime(2026, 9, 16, 23, 59, tzinfo=UTC)),
+            date(2026, 9, 17),
+        )

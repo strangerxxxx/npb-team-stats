@@ -302,6 +302,33 @@ class WriteTodayGamesTest(unittest.TestCase):
         )
         self.assertEqual(team_stats(scores, teams)["ヤ"]["win_pct"], "1.000")
 
+    def test_yesterday_uses_jst_game_date(self):
+        completed = [("2026-09-16", "神", "3", "巨", "2")]
+        scores, _remain, _h2h, teams, _teamdict, _updates, deltas = apply_games(
+            completed
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "today_2026.json"
+            output = root / "public"
+            output.mkdir()
+            source.write_text('{"date": "2026-09-17", "games": []}\n', encoding="utf-8")
+            with (
+                patch("compute.today_games_path", return_value=source),
+                patch("compute.output_dir", return_value=output),
+                patch("compute.game_date", return_value=real_date(2026, 9, 17)),
+            ):
+                write_today_games(
+                    2026,
+                    deltas,
+                    scores=scores,
+                    teams_dict=teams,
+                    completed=completed,
+                )
+            payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["yesterday"]["date"], "2026-09-16")
+        self.assertEqual(payload["yesterday"]["games"][0]["ateam"], "神")
+
 
 class FileHasCompletedGamesTest(unittest.TestCase):
     def test_true_only_when_a_numeric_score_exists(self):
