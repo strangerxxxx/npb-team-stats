@@ -55,9 +55,6 @@ function App() {
         <TodayGames />
         <section className="panel">
           <h2>順位表</h2>
-          <p className="panel-lead">
-            勝率順です。差は首位とのゲーム差、残は残り試合数です。
-          </p>
           <Standings leagues={leagues} error={error} />
         </section>
 

@@ -133,7 +133,7 @@ const TodayGames = () => {
         title="本日の試合"
         date={payload.date}
         games={games}
-        lead="のカードです。終了した試合は結果とレーティング増減を表示します。"
+        lead="のカードです。"
       />
       <GamesBlock
         title="昨日の試合"
