@@ -474,6 +474,18 @@ def team_stats(
     return stats
 
 
+def matchup_win_pcts(
+    rating_a: float | int | None,
+    rating_b: float | int | None,
+) -> tuple[float | None, float | None]:
+    """レーティングから見た、そのカードの勝率。"""
+    if rating_a is None or rating_b is None:
+        return None, None
+    p = Player("a", float(rating_a)).win_proba(Player("b", float(rating_b)))
+    a_pct = round(p, 4)
+    return a_pct, round(1.0 - a_pct, 4)
+
+
 def snapshot_through(
     games: list[tuple[str, str, str, str, str]],
     through_date: str,
@@ -505,8 +517,9 @@ def attach_today_deltas(
         b_stats = snapshot.get(bteam) or {}
         row["a_rating"] = a_stats.get("rating")
         row["b_rating"] = b_stats.get("rating")
-        row["a_win_pct"] = a_stats.get("win_pct")
-        row["b_win_pct"] = b_stats.get("win_pct")
+        row["a_win_pct"], row["b_win_pct"] = matchup_win_pcts(
+            a_stats.get("rating"), b_stats.get("rating")
+        )
         rows.append(row)
     return rows
 

@@ -19,6 +19,7 @@ describe("formatWinPct", () => {
     expect(formatWinPct(".448")).toBe("勝率44.8%");
     expect(formatWinPct("1.000")).toBe("勝率100.0%");
     expect(formatWinPct(".000")).toBe("勝率0.0%");
+    expect(formatWinPct(0.523)).toBe("勝率52.3%");
     expect(formatWinPct(null)).toBe("");
   });
 });

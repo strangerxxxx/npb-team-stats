@@ -18,8 +18,8 @@ const payload = {
       b_delta: -8.12,
       a_rating: 1508.0,
       b_rating: 1492.0,
-      a_win_pct: ".500",
-      b_win_pct: ".000",
+      a_win_pct: 0.523,
+      b_win_pct: 0.477,
     },
     {
       date: "2026-09-01",
@@ -34,8 +34,8 @@ const payload = {
       b_delta: null,
       a_rating: 1500.0,
       b_rating: 1500.0,
-      a_win_pct: ".449",
-      b_win_pct: ".576",
+      a_win_pct: 0.5,
+      b_win_pct: 0.5,
     },
     {
       date: "2026-09-01",
@@ -50,8 +50,8 @@ const payload = {
       b_delta: null,
       a_rating: 1458.57,
       b_rating: 1451.76,
-      a_win_pct: ".426",
-      b_win_pct: ".429",
+      a_win_pct: 0.51,
+      b_win_pct: 0.49,
     },
     {
       date: "2026-09-01",
@@ -66,8 +66,8 @@ const payload = {
       b_delta: null,
       a_rating: 1574.96,
       b_rating: 1591.33,
-      a_win_pct: ".562",
-      b_win_pct: ".624",
+      a_win_pct: 0.476,
+      b_win_pct: 0.524,
     },
   ],
   yesterday: {
@@ -86,8 +86,8 @@ const payload = {
         b_delta: -7.21,
         a_rating: 1560.0,
         b_rating: 1465.0,
-        a_win_pct: ".580",
-        b_win_pct: ".398",
+        a_win_pct: 0.6337,
+        b_win_pct: 0.3663,
       },
     ],
   },
@@ -118,7 +118,10 @@ describe("TodayGames", () => {
     expect(screen.getByText("+8.12")).toBeInTheDocument();
     expect(screen.getByText("-8.12")).toBeInTheDocument();
     expect(screen.getByText("1508.00")).toBeInTheDocument();
-    expect(screen.getByText("勝率50.0%")).toBeInTheDocument();
+    expect(screen.getByText("勝率52.3%")).toBeInTheDocument();
+    expect(screen.getByText("勝率47.7%")).toBeInTheDocument();
+    expect(screen.getByText("勝率63.4%")).toBeInTheDocument();
+    expect(screen.getByText("勝率36.6%")).toBeInTheDocument();
     expect(screen.getByText("5回表")).toBeInTheDocument();
     expect(screen.getByText("試合中止")).toBeInTheDocument();
     expect(screen.getByText("18:00")).toBeInTheDocument();

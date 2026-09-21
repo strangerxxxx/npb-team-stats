@@ -16,6 +16,7 @@ from compute import (
     games_behind,
     initial_games_remain,
     load_completed_games,
+    matchup_win_pcts,
     pennant_magic,
     remaining_matchups,
     snapshot_through,
@@ -44,6 +45,15 @@ class EloTest(unittest.TestCase):
         underdog = Player("b", 1500)
         self.assertAlmostEqual(favorite.win_proba(underdog), 10 / 11)
         self.assertAlmostEqual(underdog.win_proba(favorite), 1 / 11)
+
+    def test_matchup_win_pcts_from_ratings(self):
+        even_a, even_b = matchup_win_pcts(1500, 1500)
+        self.assertEqual(even_a, 0.5)
+        self.assertEqual(even_b, 0.5)
+        fav, dog = matchup_win_pcts(1900, 1500)
+        self.assertEqual(fav, round(10 / 11, 4))
+        self.assertEqual(dog, round(1 / 11, 4))
+        self.assertEqual(matchup_win_pcts(1500, None), (None, None))
 
     def test_win_update_is_zero_sum_and_uses_k(self):
         winner, loser = update_rating(Player("神"), Player("巨"))
@@ -235,7 +245,9 @@ class AttachTodayDeltasTest(unittest.TestCase):
             {"巨": {"rating": 1508.0, "win_pct": "1.000"}, "デ": {"rating": 1492.0, "win_pct": ".000"}},
         )
         self.assertEqual(rows[0]["a_rating"], 1508.0)
-        self.assertEqual(rows[0]["b_win_pct"], ".000")
+        expected_a, expected_b = matchup_win_pcts(1508.0, 1492.0)
+        self.assertEqual(rows[0]["a_win_pct"], expected_a)
+        self.assertEqual(rows[0]["b_win_pct"], expected_b)
 
 
 class WriteTodayGamesTest(unittest.TestCase):
@@ -289,12 +301,25 @@ class WriteTodayGamesTest(unittest.TestCase):
                 )
             payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["date"], "2026-09-13")
-        self.assertEqual(payload["games"][0]["a_win_pct"], "1.000")
+        today_a, today_b = matchup_win_pcts(
+            team_stats(scores, teams)["ヤ"]["rating"],
+            team_stats(scores, teams)["中"]["rating"],
+        )
+        self.assertEqual(payload["games"][0]["a_win_pct"], today_a)
+        self.assertEqual(payload["games"][0]["b_win_pct"], today_b)
         yesterday_game = payload["yesterday"]["games"][0]
         self.assertEqual(payload["yesterday"]["date"], "2026-09-12")
         self.assertEqual(yesterday_game["ateam"], "神")
         self.assertEqual(yesterday_game["a_rating"], prior_stats["神"]["rating"])
-        self.assertEqual(yesterday_game["a_win_pct"], prior_stats["神"]["win_pct"])
+        y_a, y_b = matchup_win_pcts(prior_stats["神"]["rating"], prior_stats["巨"]["rating"])
+        self.assertEqual(yesterday_game["a_win_pct"], y_a)
+        self.assertEqual(yesterday_game["b_win_pct"], y_b)
+        self.assertNotEqual(
+            yesterday_game["a_win_pct"],
+            matchup_win_pcts(
+                after_yesterday["神"]["rating"], after_yesterday["巨"]["rating"]
+            )[0],
+        )
         self.assertNotEqual(yesterday_game["a_rating"], after_yesterday["神"]["rating"])
         self.assertEqual(
             yesterday_game["a_delta"],
