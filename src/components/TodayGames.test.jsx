@@ -91,6 +91,56 @@ const payload = {
       },
     ],
   },
+  places: { 神: 1, 巨: 2, デ: 3, ソ: 1, 西: 2, 日: 3 },
+  series: [
+    {
+      date: "2026-10-17",
+      ateam: "神",
+      bteam: "デ",
+      ascore: "5",
+      bscore: "8",
+      status: "試合終了",
+      venue: "甲子園",
+      note: "",
+      series: "クライマックスシリーズ",
+      stage: "ファイナルステージ",
+      league: "central",
+      game_no: 4,
+    },
+    {
+      date: "2026-10-10",
+      ateam: "巨",
+      bteam: "デ",
+      ascore: "1",
+      bscore: "2",
+      status: "試合終了",
+      series: "クライマックスシリーズ",
+      stage: "ファーストステージ",
+      league: "central",
+    },
+    {
+      date: "2026-10-11",
+      ateam: "巨",
+      bteam: "デ",
+      ascore: "1",
+      bscore: "4",
+      status: "試合終了",
+      series: "クライマックスシリーズ",
+      stage: "ファーストステージ",
+      league: "central",
+    },
+    {
+      date: "2026-10-24",
+      ateam: "デ",
+      bteam: "ソ",
+      ascore: null,
+      bscore: null,
+      status: "試合前",
+      series: "日本シリーズ",
+      stage: "",
+      league: "",
+    },
+  ],
 };
 
 describe("TodayGames", () => {
@@ -112,9 +162,9 @@ describe("TodayGames", () => {
     render(<TodayGames />);
     expect(await screen.findByText("本日の試合")).toBeInTheDocument();
     expect(screen.getByText("昨日の試合")).toBeInTheDocument();
-    expect(screen.getByText("巨人")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getAllByText("巨人").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
     expect(screen.getByText("+8.12")).toBeInTheDocument();
     expect(screen.getByText("-8.12")).toBeInTheDocument();
     expect(screen.getByText("1508.00")).toBeInTheDocument();
@@ -126,8 +176,14 @@ describe("TodayGames", () => {
     expect(screen.getByText("試合中止")).toBeInTheDocument();
     expect(screen.getByText("18:00")).toBeInTheDocument();
     expect(screen.getAllByText("vs")).toHaveLength(2);
-    expect(screen.getByText("西武")).toBeInTheDocument();
+    expect(screen.getAllByText("西武").length).toBeGreaterThan(0);
     expect(screen.getByText("楽天")).toBeInTheDocument();
     expect(screen.getByText("8月31日の結果です。")).toBeInTheDocument();
+    expect(
+      screen.getByText("クライマックスシリーズ・日本シリーズ")
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("ファイナルステージ").length).toBeGreaterThan(0);
+    expect(screen.getByText("日本シリーズ")).toBeInTheDocument();
+    expect(screen.queryByText("クライマックスシリーズ ファイナルステージ 第4戦")).toBeNull();
   });
 });

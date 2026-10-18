@@ -21,6 +21,7 @@ from config import (
     game_date,
     has_completed_games,
     output_dir,
+    postseason_cards_path,
     prev_rank_path,
     resolve_year,
     scores_path,
@@ -236,13 +237,18 @@ def write_h2h(h2h: list[list[int]]) -> None:
             f.write(",".join([name, *map(str, h2h[i])]) + "\n")
 
 
-def write_win_probs(teams: list[Player]) -> list[list[float]]:
+def win_prob_matrix(teams: list[Player]) -> list[list[float]]:
     win_prob = [[0.5] * 12 for _ in range(12)]
     for i in range(12):
         for j in range(i + 1, 12):
             p = teams[i].win_proba(teams[j])
             win_prob[i][j] = p
             win_prob[j][i] = 1.0 - p
+    return win_prob
+
+
+def write_win_probs(teams: list[Player]) -> list[list[float]]:
+    win_prob = win_prob_matrix(teams)
 
     with open(out_path("win_prob.csv"), "w", encoding="utf-8", newline="") as f:
         f.write("チーム名,レーティング," + ",".join(TEAMNAMES) + "\n")
@@ -410,18 +416,84 @@ def simulate_ranks(
     prev_ranks: list[int],
     matchups: list[tuple[int, int, int, float]],
     count: int,
+    *,
+    verbose: bool = True,
 ) -> list[list[int]]:
     """残り試合を現状の対戦勝率で抽選する。レーティングは試合ごとに更新しない。"""
+    if not matchups:
+        ranks = [[0] * 6 for _ in range(12)]
+        central = rank_league(h2h, prev_ranks, 0, central=True)
+        pacific = rank_league(h2h, prev_ranks, 6, central=False)
+        for place in range(6):
+            ranks[central[place]][place] = count
+            ranks[pacific[place]][place] = count
+        if verbose:
+            print("順位シミュレーション: 残り試合なし")
+        return ranks
     exe = _ensure_rust_sim()
     if exe is not None:
         try:
             ranks = simulate_ranks_rust(h2h, prev_ranks, matchups, count, exe)
-            print(f"順位シミュレーション: Rust {count} 回")
+            if verbose:
+                print(f"順位シミュレーション: Rust {count} 回")
             return ranks
         except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, KeyError) as exc:
             print(f"Rustシミュレーションに失敗したため Python に切り替えます: {exc}", file=sys.stderr)
-    print(f"順位シミュレーション: Python {count} 回")
+    if verbose:
+        print(f"順位シミュレーション: Python {count} 回")
     return simulate_ranks_python(h2h, prev_ranks, matchups, count)
+
+
+def ranks_to_pcts(ranks: list[list[int]], count: int) -> list[list[float]]:
+    return [[round(x / count * 100, 2) for x in row] for row in ranks]
+
+
+def build_victory_history(
+    games: list[tuple[str, str, str, str, str]],
+    prev_ranks: list[int],
+    count: int,
+) -> tuple[list[str], list[list[list[float]]], list[list[int]] | None]:
+    """各試合日終了時点の最終順位確率を返す。"""
+    dates = sorted({game[0] for game in games})
+    history: list[list[list[float]]] = []
+    last_ranks: list[list[int]] | None = None
+    total = len(dates)
+    extra_start = min(
+        (date for date, _key in extra_game_keys(games)),
+        default=None,
+    )
+    for i, day in enumerate(dates, start=1):
+        subset = [game for game in games if game[0] <= day]
+        _scores, remain, h2h, teams_dict, _teamdict, _updates, _deltas = apply_games(
+            subset
+        )
+        teams = [teams_dict[name] for name in TEAMNAMES]
+        matchups = remaining_matchups(remain, win_prob_matrix(teams))
+        if extra_start and day >= extra_start:
+            matchups = []
+        last_ranks = simulate_ranks(
+            h2h, prev_ranks, matchups, count, verbose=False
+        )
+        history.append(ranks_to_pcts(last_ranks, count))
+        print(f"順位シミュレーション履歴 {i}/{total} {day}")
+    return dates, history, last_ranks
+
+
+def write_victory_prob_history(
+    dates: list[str],
+    history: list[list[list[float]]],
+    count: int,
+) -> None:
+    payload = {
+        "count": count,
+        "teams": list(TEAMNAMES),
+        "dates": dates,
+        "probs": history,
+    }
+    (output_dir() / "victory_prob_history.json").write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_victory_probs(ranks: list[list[int]], count: int) -> None:
@@ -524,6 +596,146 @@ def attach_today_deltas(
     return rows
 
 
+def team_records(scores: list[list[int]]) -> dict[str, dict[str, int]]:
+    return {
+        TEAMNAMES[i]: {"wins": wins, "losses": losses, "draws": draws}
+        for i, (wins, losses, draws) in enumerate(scores)
+    }
+
+
+def league_places(h2h: list[list[int]], prev_ranks: list[int]) -> dict[str, int]:
+    places: dict[str, int] = {}
+    for offset, central in ((0, True), (6, False)):
+        order = rank_league(h2h, prev_ranks, offset, central=central)
+        for place, idx in enumerate(order, start=1):
+            places[TEAMNAMES[idx]] = place
+    return places
+
+
+def classify_series(
+    ateam: str, bteam: str, places: dict[str, int]
+) -> tuple[str, str, str] | None:
+    a_central = ateam in CENTRAL
+    b_central = bteam in CENTRAL
+    if a_central != b_central:
+        return "日本シリーズ", "", ""
+    league = "central" if a_central else "pacific"
+    if places.get(ateam) == 1 or places.get(bteam) == 1:
+        return "クライマックスシリーズ", "ファイナルステージ", league
+    return "クライマックスシリーズ", "ファーストステージ", league
+
+
+def extra_game_keys(
+    games: list[tuple[str, str, str, str, str]],
+) -> set[tuple[str, frozenset[str]]]:
+    remain = initial_games_remain()
+    teamdict = {name: i for i, name in enumerate(TEAMNAMES)}
+    keys: set[tuple[str, frozenset[str]]] = set()
+    for date, ateam, _ascore, bteam, _bscore in games:
+        if ateam not in teamdict or bteam not in teamdict:
+            continue
+        ia, ib = teamdict[ateam], teamdict[bteam]
+        if remain[ia][ib] == 0:
+            keys.add((date, frozenset((ateam, bteam))))
+        else:
+            remain[ia][ib] -= 1
+            remain[ib][ia] -= 1
+    return keys
+
+
+def last_regular_season_date(
+    games: list[tuple[str, str, str, str, str]],
+) -> str | None:
+    remain = initial_games_remain()
+    teamdict = {name: i for i, name in enumerate(TEAMNAMES)}
+    last: str | None = None
+    for date, ateam, _ascore, bteam, _bscore in games:
+        if ateam not in teamdict or bteam not in teamdict:
+            continue
+        ia, ib = teamdict[ateam], teamdict[bteam]
+        if remain[ia][ib] == 0:
+            continue
+        last = date
+        remain[ia][ib] -= 1
+        remain[ib][ia] -= 1
+    return last
+
+
+def card_is_postseason(
+    card: dict,
+    extra_keys: set[tuple[str, frozenset[str]]],
+    last_regular: str | None,
+) -> bool:
+    ateam, bteam = card.get("ateam"), card.get("bteam")
+    date = card.get("date")
+    if not ateam or not bteam or not date:
+        return False
+    if (date, frozenset((ateam, bteam))) in extra_keys:
+        return True
+    if card.get("status") == "試合終了":
+        return False
+    return last_regular is None or date > last_regular
+
+
+def load_postseason_cards(year: int) -> list[dict]:
+    path = postseason_cards_path(year)
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return list(payload.get("games") or [])
+
+
+def annotate_series(
+    games: list[dict],
+    places: dict[str, int],
+) -> list[dict]:
+    counts: dict[tuple[str, str, str, frozenset[str]], int] = defaultdict(int)
+    numbered: dict[tuple[str | None, str | None, str | None], dict[str, str | int]] = {}
+    for game in sorted(
+        games, key=lambda item: (item.get("date") or "", item.get("ateam") or "")
+    ):
+        ateam, bteam = game.get("ateam"), game.get("bteam")
+        if not ateam or not bteam:
+            continue
+        series, stage, league = classify_series(ateam, bteam, places)
+        key = (series, stage, league, frozenset((ateam, bteam)))
+        counts[key] += 1
+        numbered[(game.get("date"), ateam, bteam)] = {
+            "series": series,
+            "stage": stage,
+            "league": league,
+            "game_no": counts[key],
+        }
+    rows: list[dict] = []
+    for game in games:
+        row = dict(game)
+        extra = numbered.get((game.get("date"), game.get("ateam"), game.get("bteam")))
+        if extra:
+            row.update(extra)
+        rows.append(row)
+    return rows
+
+
+def merge_card_meta(rows: list[dict], cards: list[dict]) -> list[dict]:
+    extra = {
+        (card.get("date"), card.get("ateam"), card.get("bteam")): card
+        for card in cards
+    }
+    out: list[dict] = []
+    for row in rows:
+        card = extra.get((row.get("date"), row.get("ateam"), row.get("bteam")))
+        if not card:
+            out.append(row)
+            continue
+        merged = dict(row)
+        if not merged.get("venue") and card.get("venue"):
+            merged["venue"] = card["venue"]
+        if not merged.get("note") and card.get("note"):
+            merged["note"] = card["note"]
+        out.append(merged)
+    return out
+
+
 def finished_games_on(
     games: list[tuple[str, str, str, str, str]],
     ymd: str,
@@ -555,10 +767,26 @@ def write_today_games(
     teams_dict: dict[str, Player],
     completed: list[tuple[str, str, str, str, str]],
     today: datetime.date | None = None,
+    h2h: list[list[int]] | None = None,
+    prev_ranks: list[int] | None = None,
+    games_remain: list[list[int]] | None = None,
 ) -> None:
     current = today or game_date()
+    current_ymd = current.strftime("%Y-%m-%d")
     yesterday = (current - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     today_stats = team_stats(scores, teams_dict)
+    if h2h is None or prev_ranks is None:
+        _scores, games_remain, h2h, _teams, _teamdict, _updates, _deltas = apply_games(
+            completed
+        )
+        prev_ranks = load_prev_ranks(year)
+    places = league_places(h2h, prev_ranks)
+    extra_keys = extra_game_keys(completed)
+    last_regular = last_regular_season_date(completed)
+    cards = load_postseason_cards(year)
+    postseason_cards = [
+        card for card in cards if card_is_postseason(card, extra_keys, last_regular)
+    ]
 
     source = today_games_path(year)
     today_date: str | None = None
@@ -569,8 +797,17 @@ def write_today_games(
         today_games = attach_today_deltas(
             payload.get("games") or [], deltas, today_stats
         )
+    if not today_games:
+        today_date = today_date or current_ymd
+        today_games = attach_today_deltas(
+            [card for card in postseason_cards if card.get("date") == current_ymd],
+            deltas,
+            today_stats,
+        )
 
-    yesterday_rows = finished_games_on(completed, yesterday)
+    yesterday_rows = merge_card_meta(
+        finished_games_on(completed, yesterday), cards
+    )
     yesterday_games: list[dict] = []
     if yesterday_rows:
         prior_date = (current - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
@@ -579,12 +816,65 @@ def write_today_games(
             yesterday_rows, deltas, yesterday_stats
         )
 
+    series_source = postseason_cards[:]
+    seen = {
+        (row.get("date"), row.get("ateam"), row.get("bteam"))
+        for row in series_source
+    }
+    for date, ateam, ascore, bteam, bscore in completed:
+        if (date, frozenset((ateam, bteam))) not in extra_keys:
+            continue
+        key = (date, ateam, bteam)
+        if key in seen:
+            continue
+        seen.add(key)
+        series_source.append(
+            {
+                "date": date,
+                "ateam": ateam,
+                "bteam": bteam,
+                "ascore": ascore,
+                "bscore": bscore,
+                "status": "試合終了",
+                "venue": "",
+                "note": "",
+            }
+        )
+    series_games = annotate_series(
+        attach_today_deltas(series_source, deltas, today_stats),
+        places,
+    )
+    labels = {
+        (row.get("date"), row.get("ateam"), row.get("bteam")): row
+        for row in series_games
+    }
+
+    def with_series_labels(rows: list[dict]) -> list[dict]:
+        out: list[dict] = []
+        for row in rows:
+            labeled = labels.get((row.get("date"), row.get("ateam"), row.get("bteam")))
+            if not labeled:
+                out.append(row)
+                continue
+            merged = dict(row)
+            for field in ("series", "stage", "league", "game_no"):
+                if labeled.get(field) not in (None, ""):
+                    merged[field] = labeled[field]
+            out.append(merged)
+        return out
+
+    today_games = with_series_labels(today_games)
+    yesterday_games = with_series_labels(yesterday_games)
+
     (output_dir() / "today_games.json").write_text(
         json.dumps(
             {
                 "date": today_date,
                 "games": today_games,
                 "yesterday": {"date": yesterday, "games": yesterday_games},
+                "places": places,
+                "records": team_records(scores),
+                "series": series_games,
             },
             ensure_ascii=False,
             indent=2,
@@ -633,14 +923,16 @@ def apply_games(
             continue
 
         ia, ib = teamdict[ateam], teamdict[bteam]
+        extra = games_remain[ia][ib] == 0
         before_a = teams_dict[ateam].rating
         before_b = teams_dict[bteam].rating
         if ascore == bscore:
             teams_dict[ateam], teams_dict[bteam] = update_rating_draw(
                 teams_dict[ateam], teams_dict[bteam]
             )
-            scores[ia][2] += 1
-            scores[ib][2] += 1
+            if not extra:
+                scores[ia][2] += 1
+                scores[ib][2] += 1
         else:
             winner, loser = (
                 (ateam, bteam) if int(ascore) > int(bscore) else (bteam, ateam)
@@ -648,9 +940,10 @@ def apply_games(
             teams_dict[winner], teams_dict[loser] = update_rating(
                 teams_dict[winner], teams_dict[loser]
             )
-            scores[teamdict[winner]][0] += 1
-            scores[teamdict[loser]][1] += 1
-            h2h[teamdict[winner]][teamdict[loser]] += 1
+            if not extra:
+                scores[teamdict[winner]][0] += 1
+                scores[teamdict[loser]][1] += 1
+                h2h[teamdict[winner]][teamdict[loser]] += 1
 
         deltas[(date, frozenset((ateam, bteam)))] = {
             ateam: teams_dict[ateam].rating - before_a,
@@ -658,8 +951,9 @@ def apply_games(
         }
         date_updates[date].append((ateam, teams_dict[ateam].rating))
         date_updates[date].append((bteam, teams_dict[bteam].rating))
-        games_remain[ia][ib] = max(0, games_remain[ia][ib] - 1)
-        games_remain[ib][ia] = max(0, games_remain[ib][ia] - 1)
+        if not extra:
+            games_remain[ia][ib] = max(0, games_remain[ia][ib] - 1)
+            games_remain[ib][ia] = max(0, games_remain[ib][ia] - 1)
 
     return scores, games_remain, h2h, teams_dict, teamdict, date_updates, deltas
 
@@ -705,9 +999,12 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
     win_prob = write_win_probs(teams)
     write_expected_standings(scores, games_remain, win_prob)
 
-    matchups = remaining_matchups(games_remain, win_prob)
-    ranks = simulate_ranks(h2h, prev_ranks, matchups, SIMULATION_COUNT)
-    write_victory_probs(ranks, SIMULATION_COUNT)
+    dates, history, last_ranks = build_victory_history(
+        completed, prev_ranks, SIMULATION_COUNT
+    )
+    if last_ranks is not None:
+        write_victory_probs(last_ranks, SIMULATION_COUNT)
+        write_victory_prob_history(dates, history, SIMULATION_COUNT)
     write_meta(year, prev_ranks)
     write_today_games(
         year,
@@ -715,6 +1012,9 @@ def compute_year(year: int, *, allow_fallback: bool = False) -> None:
         scores=scores,
         teams_dict=teams_dict,
         completed=completed,
+        h2h=h2h,
+        prev_ranks=prev_ranks,
+        games_remain=games_remain,
     )
     print(f"{year}年の結果を {output_dir()} に書き出しました。")
 

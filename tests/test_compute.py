@@ -12,7 +12,10 @@ from compute import (
     _ensure_rust_sim,
     attach_today_deltas,
     apply_games,
+    classify_series,
+    extra_game_keys,
     format_win_pct,
+    last_regular_season_date,
     games_behind,
     initial_games_remain,
     load_completed_games,
@@ -24,6 +27,8 @@ from compute import (
     update_rating,
     update_rating_draw,
     write_today_games,
+    write_victory_prob_history,
+    build_victory_history,
 )
 from config import (
     INITIAL_RATING,
@@ -186,6 +191,37 @@ class ApplyGamesTest(unittest.TestCase):
         self.assertEqual(remain[0][8], INTERLEAGUE_GAMES - 1)
         self.assertEqual(remain[8][0], INTERLEAGUE_GAMES - 1)
 
+    def test_extra_games_update_rating_not_standings(self):
+        regular = [("2026-04-01", "神", "1", "巨", "0")] * INTRA_LEAGUE_GAMES
+        extra = ("2026-10-10", "神", "1", "巨", "0")
+        scores, remain, h2h, teams, _teamdict, _updates, _deltas = apply_games(
+            [*regular, extra]
+        )
+        self.assertEqual(scores[TEAMNAMES.index("神")][0], INTRA_LEAGUE_GAMES)
+        self.assertEqual(remain[0][3], 0)
+        self.assertEqual(h2h[0][3], INTRA_LEAGUE_GAMES)
+        regular_teams = apply_games(regular)[3]
+        self.assertGreater(teams["神"].rating, regular_teams["神"].rating)
+        self.assertEqual(extra_game_keys([*regular, extra]), {("2026-10-10", frozenset(("神", "巨")))})
+        self.assertEqual(last_regular_season_date([*regular, extra]), "2026-04-01")
+
+
+class ClassifySeriesTest(unittest.TestCase):
+    def test_labels_climax_and_japan_series(self):
+        places = {"神": 1, "デ": 3, "巨": 2, "ソ": 1, "日": 3, "西": 2}
+        self.assertEqual(
+            classify_series("巨", "デ", places),
+            ("クライマックスシリーズ", "ファーストステージ", "central"),
+        )
+        self.assertEqual(
+            classify_series("神", "デ", places),
+            ("クライマックスシリーズ", "ファイナルステージ", "central"),
+        )
+        self.assertEqual(
+            classify_series("デ", "ソ", places),
+            ("日本シリーズ", "", ""),
+        )
+
 
 class AttachTodayDeltasTest(unittest.TestCase):
     def test_adds_deltas_only_for_finished_games(self):
@@ -301,12 +337,14 @@ class WriteTodayGamesTest(unittest.TestCase):
                 )
             payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["date"], "2026-09-13")
+        current = team_stats(scores, teams)
         today_a, today_b = matchup_win_pcts(
-            team_stats(scores, teams)["ヤ"]["rating"],
-            team_stats(scores, teams)["中"]["rating"],
+            current["ヤ"]["rating"],
+            current["中"]["rating"],
         )
         self.assertEqual(payload["games"][0]["a_win_pct"], today_a)
         self.assertEqual(payload["games"][0]["b_win_pct"], today_b)
+        self.assertEqual(payload["games"][0]["a_rating"], current["ヤ"]["rating"])
         yesterday_game = payload["yesterday"]["games"][0]
         self.assertEqual(payload["yesterday"]["date"], "2026-09-12")
         self.assertEqual(yesterday_game["ateam"], "神")
@@ -314,18 +352,22 @@ class WriteTodayGamesTest(unittest.TestCase):
         y_a, y_b = matchup_win_pcts(prior_stats["神"]["rating"], prior_stats["巨"]["rating"])
         self.assertEqual(yesterday_game["a_win_pct"], y_a)
         self.assertEqual(yesterday_game["b_win_pct"], y_b)
-        self.assertNotEqual(
-            yesterday_game["a_win_pct"],
-            matchup_win_pcts(
-                after_yesterday["神"]["rating"], after_yesterday["巨"]["rating"]
-            )[0],
-        )
+        self.assertNotEqual(yesterday_game["a_rating"], current["神"]["rating"])
         self.assertNotEqual(yesterday_game["a_rating"], after_yesterday["神"]["rating"])
+        self.assertAlmostEqual(
+            yesterday_game["a_rating"] + yesterday_game["a_delta"],
+            current["神"]["rating"],
+            places=2,
+        )
+        self.assertEqual(
+            payload["records"]["神"],
+            {"wins": scores[0][0], "losses": scores[0][1], "draws": scores[0][2]},
+        )
         self.assertEqual(
             yesterday_game["a_delta"],
             round(deltas[("2026-09-12", frozenset(("神", "巨")))]["神"], 2),
         )
-        self.assertEqual(team_stats(scores, teams)["ヤ"]["win_pct"], "1.000")
+        self.assertEqual(current["ヤ"]["win_pct"], "1.000")
 
     def test_yesterday_uses_jst_game_date(self):
         completed = [("2026-09-16", "神", "3", "巨", "2")]
@@ -353,6 +395,68 @@ class WriteTodayGamesTest(unittest.TestCase):
             payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["yesterday"]["date"], "2026-09-16")
         self.assertEqual(payload["yesterday"]["games"][0]["ateam"], "神")
+
+    def test_writes_japan_series_cards(self):
+        completed = [("2026-04-01", "デ", "1", "ソ", "0")] * INTERLEAGUE_GAMES
+        extra = ("2026-10-24", "デ", "2", "ソ", "1")
+        completed = [*completed, extra]
+        scores, _remain, _h2h, teams, _teamdict, _updates, deltas = apply_games(
+            completed
+        )
+        cards = [
+            {
+                "date": "2026-10-24",
+                "ateam": "デ",
+                "bteam": "ソ",
+                "ascore": "2",
+                "bscore": "1",
+                "status": "試合終了",
+                "venue": "横浜",
+                "note": "",
+            },
+            {
+                "date": "2026-10-25",
+                "ateam": "デ",
+                "bteam": "ソ",
+                "ascore": None,
+                "bscore": None,
+                "status": "試合前",
+                "venue": "横浜",
+                "note": "18:00",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "today_2026.json"
+            cards_path = root / "postseason_2026.json"
+            output = root / "public"
+            output.mkdir()
+            source.write_text('{"date": "2026-10-18", "games": []}\n', encoding="utf-8")
+            cards_path.write_text(
+                json.dumps({"year": 2026, "games": cards}), encoding="utf-8"
+            )
+            with (
+                patch("compute.today_games_path", return_value=source),
+                patch("compute.postseason_cards_path", return_value=cards_path),
+                patch("compute.output_dir", return_value=output),
+            ):
+                write_today_games(
+                    2026,
+                    deltas,
+                    scores=scores,
+                    teams_dict=teams,
+                    completed=completed,
+                    today=real_date(2026, 10, 18),
+                )
+            payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
+        series = payload["series"]
+        self.assertEqual(len(series), 2)
+        self.assertEqual(series[0]["series"], "日本シリーズ")
+        self.assertEqual(series[0]["game_no"], 1)
+        self.assertEqual(series[1]["date"], "2026-10-25")
+        self.assertEqual(series[1]["status"], "試合前")
+        self.assertEqual(payload["games"], [])
+        self.assertIn("places", payload)
 
 
 class FileHasCompletedGamesTest(unittest.TestCase):
@@ -383,6 +487,57 @@ class ResolveYearTest(unittest.TestCase):
         mock_date.today.return_value = real_date(2026, 4, 1)
         has_games.side_effect = lambda year: year == 2026
         self.assertEqual(resolve_year(), 2026)
+
+
+class VictoryHistoryTest(unittest.TestCase):
+    def test_builds_one_snapshot_per_game_date(self):
+        games = [
+            ("2026-04-01", "神", "3", "中", "1"),
+            ("2026-04-02", "神", "2", "巨", "1"),
+        ]
+        prev = [99] * 12
+        missing = str(Path(tempfile.gettempdir()) / "no-npb-sim")
+        with patch.dict(os.environ, {"NPB_SIM_BIN": missing}):
+            dates, history, last_ranks = build_victory_history(games, prev, 40)
+        self.assertEqual(dates, ["2026-04-01", "2026-04-02"])
+        self.assertEqual(len(history), 2)
+        self.assertEqual(len(history[0]), 12)
+        self.assertEqual(len(history[0][0]), 6)
+        self.assertAlmostEqual(sum(row[0] for row in history[0][:6]), 100.0, places=1)
+        self.assertAlmostEqual(sum(row[0] for row in history[0][6:]), 100.0, places=1)
+        self.assertIsNotNone(last_ranks)
+        self.assertNotEqual(history[0], history[1])
+
+    def test_writes_history_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            with patch("compute.output_dir", return_value=output):
+                write_victory_prob_history(
+                    ["2026-04-01"],
+                    [[[100.0] + [0.0] * 5] + [[0.0] * 6] * 11],
+                    40,
+                )
+            payload = json.loads((output / "victory_prob_history.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["dates"], ["2026-04-01"])
+        self.assertEqual(payload["count"], 40)
+        self.assertEqual(payload["teams"][0], "神")
+        self.assertEqual(payload["probs"][0][0][0], 100.0)
+
+    def test_freezes_ranks_once_postseason_starts(self):
+        regular = [("2026-04-01", "デ", "1", "ソ", "0")] * INTERLEAGUE_GAMES
+        extra = ("2026-10-10", "デ", "2", "ソ", "1")
+        prev = [99] * 12
+        missing = str(Path(tempfile.gettempdir()) / "no-npb-sim")
+        with patch.dict(os.environ, {"NPB_SIM_BIN": missing}):
+            dates, history, last_ranks = build_victory_history(
+                [*regular, extra], prev, 20
+            )
+        self.assertEqual(dates[-1], "2026-10-10")
+        last = history[-1]
+        self.assertTrue(all(abs(sum(row) - 100.0) < 0.01 for row in last))
+        self.assertEqual(sum(1 for row in last[:6] if row[0] == 100.0), 1)
+        self.assertEqual(sum(1 for row in last[6:] if row[0] == 100.0), 1)
+        self.assertEqual(sum(last_ranks[0]), 20)
 
 
 class SimBinaryTest(unittest.TestCase):

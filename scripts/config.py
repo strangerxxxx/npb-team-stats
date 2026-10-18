@@ -35,6 +35,10 @@ def today_games_path(year: int) -> Path:
     return scores_dir() / f"today_{year}.json"
 
 
+def postseason_cards_path(year: int) -> Path:
+    return scores_dir() / f"postseason_{year}.json"
+
+
 def prev_rank_path(year: int) -> Path:
     return scores_dir() / f"prev_rank_{year}.json"
 

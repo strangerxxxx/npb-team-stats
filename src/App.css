@@ -191,10 +191,160 @@ h3 {
   font-weight: 600;
 }
 
+.victory-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+  margin: 0 0 1rem;
+}
+
+.victory-date-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.victory-date-slider {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  accent-color: var(--accent);
+}
+
+.victory-date-input {
+  font-size: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.2rem 0.45rem;
+  color: var(--ink);
+  background: #fff;
+}
+
 .today-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+}
+
+.bracket {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "central pacific"
+    "japan japan";
+  gap: 1.15rem 1.4rem;
+  align-items: start;
+}
+
+.bracket-central {
+  grid-area: central;
+}
+
+.bracket-pacific {
+  grid-area: pacific;
+}
+
+.bracket-japan {
+  grid-area: japan;
+  max-width: 28rem;
+  justify-self: center;
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .bracket {
+    grid-template-columns: 1fr minmax(15rem, 0.95fr) 1fr;
+    grid-template-areas: "central japan pacific";
+    align-items: center;
+  }
+
+  .bracket-japan {
+    max-width: none;
+  }
+
+  .bracket-japan .bracket-match {
+    box-shadow: 0 0 0 2px rgba(31, 107, 74, 0.12);
+  }
+}
+
+.bracket-league h3 {
+  margin-bottom: 0.7rem;
+}
+
+.bracket-connector {
+  width: 2px;
+  height: 0.7rem;
+  margin: 0.15rem auto;
+  background: var(--line);
+}
+
+.bracket-match {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fbfdfb;
+}
+
+.bracket-round {
+  margin: 0;
+  padding: 0.38rem 0.75rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: #f4f8f5;
+}
+
+.bracket-team {
+  display: grid;
+  grid-template-columns: 1.3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.48rem 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.bracket-team.is-winner {
+  background: #e7f6ee;
+}
+
+.bracket-team.is-loser {
+  opacity: 0.55;
+}
+
+.bracket-seed {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.bracket-tbd {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.bracket-wins {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bracket-adv {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.bracket-note {
+  margin: 0;
+  padding: 0.28rem 0.75rem 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
 }
 
 .today-card {
@@ -204,6 +354,13 @@ h3 {
   background: #fbfdfb;
 }
 
+.today-series {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .today-card-meta {
   display: flex;
   justify-content: space-between;
@@ -211,6 +368,10 @@ h3 {
   margin-bottom: 0.55rem;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.today-date {
+  font-variant-numeric: tabular-nums;
 }
 
 .today-status {
@@ -323,6 +484,18 @@ h3 {
 
   .today-grid {
     grid-template-columns: 1fr;
+  }
+
+  .bracket {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "central"
+      "pacific"
+      "japan";
+  }
+
+  .bracket-japan {
+    max-width: none;
   }
 
   .panel {

@@ -22,6 +22,7 @@ const MATCHUP = [
 
 describe("CsvTable", () => {
   beforeEach(() => {
+    loadCsv.mockReset();
     loadCsv.mockImplementation(async (file) => {
       if (file === "victory.csv") return VICTORY;
       if (file === "win_prob.csv") return MATCHUP;
@@ -50,6 +51,20 @@ describe("CsvTable", () => {
     expect(heatmapStyle(20, 0, 100).backgroundColor).not.toBe(
       heatmapStyle(20, 20, 80).backgroundColor
     );
+  });
+
+  it("renders supplied rows without fetching", async () => {
+    render(
+      <CsvTable
+        rows={[
+          ["チーム名", "1位"],
+          ["神", "12.50"],
+        ]}
+        rankColors={false}
+      />
+    );
+    expect(await screen.findByText("12.50")).toBeInTheDocument();
+    expect(loadCsv).not.toHaveBeenCalled();
   });
 
   it("paints matchup win probability on a 20–80 scale", async () => {

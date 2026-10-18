@@ -36,32 +36,35 @@ function insertRatingColumn(headers, body, latestRatings) {
 
 const CsvTable = ({
   file,
+  rows,
   heatmap = false,
   teamOrder,
   showRating = false,
   leagueSize = 6,
   rankColors = true,
 }) => {
-  const [data, setData] = useState([]);
+  const [fetched, setFetched] = useState([]);
   const [error, setError] = useState(null);
   const orderKey = teamOrder ? teamOrder.join(",") : "";
+  const controlled = rows != null;
 
   useEffect(() => {
+    if (controlled) return undefined;
     Promise.all([
       loadCsv(file, { header: false }),
       showRating ? loadCsv("rating.csv", { header: true }) : Promise.resolve(null),
     ])
-      .then(([rows, ratingRows]) => {
-        if (rows.length < 2) {
-          setData(rows);
+      .then(([loaded, ratingRows]) => {
+        if (loaded.length < 2) {
+          setFetched(loaded);
           return;
         }
-        let [headers, ...body] = rows;
-        if (ratingRows?.length) {
+        let [headers, ...body] = loaded;
+        if (ratingRows?.length && !headers.includes("レーティング")) {
           const latest = ratingRows[ratingRows.length - 1];
           ({ headers, body } = insertRatingColumn(headers, body, latest));
         }
-        setData(
+        setFetched(
           reorderTable(
             headers,
             body,
@@ -73,7 +76,18 @@ const CsvTable = ({
         console.error(err);
         setError(err.message);
       });
-  }, [file, orderKey, showRating]);
+    return undefined;
+  }, [controlled, file, orderKey, showRating]);
+
+  const data = controlled
+    ? rows.length < 2
+      ? rows
+      : reorderTable(
+          rows[0],
+          rows.slice(1),
+          orderKey ? orderKey.split(",") : undefined
+        )
+    : fetched;
 
   if (error) {
     return <p className="text-danger">{error}</p>;

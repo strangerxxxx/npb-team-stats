@@ -5,6 +5,7 @@ import "./App.css";
 import Standings from "./components/Standings";
 import TodayGames from "./components/TodayGames";
 import CsvTable from "./components/CsvTable";
+import VictoryProbs from "./components/VictoryProbs";
 import { Container, Row, Col } from "react-bootstrap";
 import { teamOrder, useStandings } from "./hooks/useStandings";
 import { useSeasonMeta } from "./hooks/useSeasonMeta";
@@ -83,32 +84,10 @@ function App() {
           </Row>
         </section>
 
-        <section className="panel">
-          <h2>最終順位確率（％）</h2>
-          <p className="panel-lead">
-            残り試合を10万回シミュレーションした最終順位の割合です。
-          </p>
-          <Row>
-            <Col md={6}>
-              <h3>セ・リーグ</h3>
-              <CsvTable
-                file="victory_prob_central.csv"
-                heatmap
-                teamOrder={centralOrder}
-                rankColors={false}
-              />
-            </Col>
-            <Col md={6}>
-              <h3>パ・リーグ</h3>
-              <CsvTable
-                file="victory_prob_pacific.csv"
-                heatmap
-                teamOrder={pacificOrder}
-                rankColors={false}
-              />
-            </Col>
-          </Row>
-        </section>
+        <VictoryProbs
+          centralOrder={centralOrder}
+          pacificOrder={pacificOrder}
+        />
 
         <section className="panel">
           <h2>対戦勝率（％）</h2>

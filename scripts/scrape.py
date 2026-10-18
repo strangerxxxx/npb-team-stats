@@ -11,7 +11,9 @@ from datetime import date
 import requests
 from bs4 import BeautifulSoup
 from config import (
+    game_date,
     has_completed_games,
+    postseason_cards_path,
     prev_rank_path,
     resolve_year,
     scores_dir,
@@ -23,6 +25,7 @@ from teams import TEAM_CODE_TO_ABBR
 TEAM_IMG_RE = re.compile(r"(?:ini|logo)_([a-z]+)_[ms]\.(?:gif|png)")
 LOGO_CODE_RE = re.compile(r"logo_([a-z]+)_m\.(?:gif|png)")
 DAILY_HREF_RE = re.compile(r"/scores/(\d{4})/(\d{2})(\d{2})/")
+HEADING_DATE_RE = re.compile(r"(\d{1,2})月(\d{1,2})日")
 VENUE_RE = re.compile(r"（([^）]+)）")
 TIME_RE = re.compile(r"\d{1,2}:\d{2}")
 JP_TIME_RE = re.compile(r"(\d{1,2})時(\d{2})分")
@@ -68,10 +71,51 @@ def parse_prev_ranks(soup: BeautifulSoup) -> dict[str, int]:
     return ranks
 
 
-def parse_calendar_games(
+def heading_ymd(text: str, year: int) -> str | None:
+    match = HEADING_DATE_RE.search(text or "")
+    if not match:
+        return None
+    return f"{year}-{int(match.group(1)):02d}-{int(match.group(2)):02d}"
+
+
+def ymd_from_href(href: str, fallback: str | None) -> str | None:
+    match = DAILY_HREF_RE.search(href or "")
+    if match:
+        return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+    return fallback
+
+
+def parse_game_block(block, ymd: str | None) -> dict[str, str | None] | None:
+    imgs = block.select("td.team1 img, td.team2 img")
+    if len(imgs) != 2:
+        return None
+    ateam = team_abbr_from_img(imgs[0])
+    bteam = team_abbr_from_img(imgs[1])
+    if not ateam or not bteam:
+        return None
+    date_value = ymd_from_href(block.get("href", ""), ymd)
+    if not date_value:
+        return None
+    scores = [s.get_text(strip=True) for s in block.select("td.score")]
+    ascore = scores[0] if len(scores) == 2 and scores[0].isdigit() else None
+    bscore = scores[1] if len(scores) == 2 and scores[1].isdigit() else None
+    status, venue, note = classify_game_state(block, ascore is not None)
+    return {
+        "date": date_value,
+        "ateam": ateam,
+        "bteam": bteam,
+        "ascore": ascore,
+        "bscore": bscore,
+        "status": status,
+        "venue": venue,
+        "note": note,
+    }
+
+
+def parse_calendar_cards(
     calendar, year: int, month: int
-) -> list[tuple[str, str, str, str, str]]:
-    rows: list[tuple[str, str, str, str, str]] = []
+) -> list[dict[str, str | None]]:
+    cards: list[dict[str, str | None]] = []
     for td in calendar.find_all("td"):
         date_el = td.find("div", class_="date")
         if date_el is None:
@@ -79,25 +123,27 @@ def parse_calendar_games(
         date_text = date_el.get_text(strip=True)
         if not date_text.isdigit():
             continue
-
         ymd = f"{year}-{month:02}-{int(date_text):02}"
         for link in td.select("a.link_block"):
-            scores = [s.get_text(strip=True) for s in link.select("td.score")]
-            if len(scores) != 2:
-                continue
-            # 未開催・中止などは "*" などになるためスキップ
-            if not scores[0].isdigit() or not scores[1].isdigit():
-                continue
+            game = parse_game_block(link, ymd)
+            if game and str(game["date"]).startswith(f"{year}-"):
+                cards.append(game)
+    return cards
 
-            imgs = link.select("td.team1 img, td.team2 img")
-            if len(imgs) != 2:
-                continue
-            ateam = team_abbr_from_img(imgs[0])
-            bteam = team_abbr_from_img(imgs[1])
-            if not ateam or not bteam:
-                continue
 
-            rows.append((ymd, ateam, scores[0], bteam, scores[1]))
+def parse_calendar_games(
+    calendar, year: int, month: int
+) -> list[tuple[str, str, str, str, str]]:
+    rows: list[tuple[str, str, str, str, str]] = []
+    for game in parse_calendar_cards(calendar, year, month):
+        ascore, bscore = game["ascore"], game["bscore"]
+        if not ascore or not bscore:
+            continue
+        if game["status"] == "試合中止":
+            continue
+        rows.append(
+            (game["date"], game["ateam"], ascore, game["bteam"], bscore)
+        )
     return rows
 
 
@@ -112,11 +158,34 @@ def parse_schedule_html(
     return parse_calendar_games(calendar, year, month), prev_ranks
 
 
-def parse_month(year: int, month: int) -> tuple[list[tuple[str, str, str, str, str]], dict[str, int]]:
+def parse_month(
+    year: int, month: int
+) -> tuple[list[tuple[str, str, str, str, str]], dict[str, int], list[dict[str, str | None]]]:
     url = f"https://npb.jp/games/{year}/schedule_{month:02}.html"
     res = requests.get(url, timeout=30)
     res.raise_for_status()
-    return parse_schedule_html(res.content, year, month)
+    games, prev_ranks = parse_schedule_html(res.content, year, month)
+    soup = BeautifulSoup(res.content, "html.parser")
+    calendar = soup.find("div", id="calendar")
+    cards = parse_calendar_cards(calendar, year, month) if calendar else []
+    return games, prev_ranks, cards
+
+
+def parse_schedule_section(
+    soup: BeautifulSoup, year: int
+) -> list[dict[str, str | None]]:
+    root = soup.find("div", id="schedule_section")
+    if root is None:
+        return []
+    games: list[dict[str, str | None]] = []
+    for block_el in root.select("div.block"):
+        heading = block_el.find("h6")
+        ymd = heading_ymd(heading.get_text(" ", strip=True) if heading else "", year)
+        for link in block_el.select("a.link_block"):
+            game = parse_game_block(link, ymd)
+            if game and str(game["date"]).startswith(f"{year}-"):
+                games.append(game)
+    return games
 
 
 def parse_daily_html(
@@ -125,42 +194,21 @@ def parse_daily_html(
     """https://npb.jp/games/{year}/ の試合速報から当日カードを取り出す。"""
     soup = BeautifulSoup(html, "html.parser")
     root = soup.find("div", id="game_score")
-    if root is None:
-        return []
-
+    heading = None
     games: list[dict[str, str | None]] = []
-    for block in root.select("a.link_block"):
-        imgs = block.select("td.team1 img, td.team2 img")
-        if len(imgs) != 2:
-            continue
-        ateam = team_abbr_from_img(imgs[0])
-        bteam = team_abbr_from_img(imgs[1])
-        if not ateam or not bteam:
-            continue
-        href = block.get("href", "")
-        match = DAILY_HREF_RE.search(href)
-        if not match:
-            continue
-        ymd = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
-        if not ymd.startswith(f"{year}-"):
-            continue
-        scores = [s.get_text(strip=True) for s in block.select("td.score")]
-        ascore = scores[0] if len(scores) == 2 and scores[0].isdigit() else None
-        bscore = scores[1] if len(scores) == 2 and scores[1].isdigit() else None
-        status, venue, note = classify_game_state(block, ascore is not None)
-        games.append(
-            {
-                "date": ymd,
-                "ateam": ateam,
-                "bteam": bteam,
-                "ascore": ascore,
-                "bscore": bscore,
-                "status": status,
-                "venue": venue,
-                "note": note,
-            }
-        )
-    return games
+    if root is not None:
+        h5 = root.find("h5")
+        heading = heading_ymd(h5.get_text(" ", strip=True) if h5 else "", year)
+        for block in root.select("a.link_block"):
+            game = parse_game_block(block, heading)
+            if game and str(game["date"]).startswith(f"{year}-"):
+                games.append(game)
+    if games:
+        return games
+    week = parse_schedule_section(soup, year)
+    if heading:
+        return [game for game in week if game["date"] == heading]
+    return []
 
 
 def classify_game_state(block, has_scores: bool) -> tuple[str, str, str]:
@@ -195,7 +243,7 @@ def classify_game_state(block, has_scores: bool) -> tuple[str, str, str]:
     if time_note:
         return "試合前", venue, time_note
     if has_scores:
-        return "試合中", venue, ""
+        return "試合終了", venue, ""
     return "試合前", venue, ""
 
 
@@ -225,9 +273,19 @@ def fetch_daily_games(year: int) -> list[dict[str, str | None]]:
 def write_today_games(year: int, daily: list[dict[str, str | None]]) -> None:
     path = today_games_path(year)
     path.parent.mkdir(parents=True, exist_ok=True)
-    date_value = daily[0]["date"] if daily else None
+    date_value = daily[0]["date"] if daily else game_date().strftime("%Y-%m-%d")
     path.write_text(
         json.dumps({"date": date_value, "games": daily}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_postseason_cards(year: int, cards: list[dict[str, str | None]]) -> None:
+    path = postseason_cards_path(year)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"year": year, "games": cards}, ensure_ascii=False, indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -258,19 +316,25 @@ def scrape_year(year: int) -> tuple[list[str], dict[str, int]]:
     scores_dir().mkdir(parents=True, exist_ok=True)
     games: list[tuple[str, str, str, str, str]] = []
     prev_ranks: dict[str, int] = {}
+    postseason_cards: list[dict[str, str | None]] = []
     # 開幕が3月の年もあるため 3〜11 月を対象にする
     months = range(3, 12)
     last_month = 11
     for month in months:
         try:
-            month_games, ranks = parse_month(year, month)
+            month_games, ranks, cards = parse_month(year, month)
             games.extend(month_games)
+            if month >= 10:
+                postseason_cards.extend(cards)
             if ranks and not prev_ranks:
                 prev_ranks = ranks
         except requests.RequestException:
             pass
         if month < last_month:
             time.sleep(1)
+
+    if postseason_cards:
+        write_postseason_cards(year, postseason_cards)
 
     if year == date.today().year:
         try:

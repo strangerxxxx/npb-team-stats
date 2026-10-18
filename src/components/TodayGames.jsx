@@ -8,6 +8,8 @@ import {
   formatWinPct,
   statusText,
 } from "../utils/todayGames";
+import PostseasonBracket from "./PostseasonBracket";
+import { buildBracket, seriesGameLabel } from "../utils/postseason";
 
 function Delta({ value }) {
   const text = formatRatingDelta(value);
@@ -37,7 +39,7 @@ function SideStats({ rating, winPct, delta, finished }) {
   );
 }
 
-export function GameCard({ game }) {
+export function GameCard({ game, showDate = false }) {
   const finished = game.status === "試合終了";
   const showScore =
     (finished || game.status === "試合中") &&
@@ -45,14 +47,19 @@ export function GameCard({ game }) {
     game.bscore != null;
   const aWins = finished && Number(game.ascore) > Number(game.bscore);
   const bWins = finished && Number(game.bscore) > Number(game.ascore);
+  const dateLabel = showDate ? formatGameDate(game.date) : "";
   return (
     <div className="today-card">
+      {seriesGameLabel(game) ? (
+        <p className="today-series">{seriesGameLabel(game)}</p>
+      ) : null}
       <div className="today-card-meta">
         <span
           className={`today-status${game.status === "試合中止" ? " today-status-cancel" : ""}`}
         >
           {statusText(game)}
         </span>
+        {dateLabel ? <span className="today-date">{dateLabel}</span> : null}
         {game.venue ? <span className="today-venue">{game.venue}</span> : null}
       </div>
       <div className="today-matchup">
@@ -90,19 +97,21 @@ export function GameCard({ game }) {
   );
 }
 
-function GamesBlock({ title, date, games, lead }) {
+function GamesBlock({ title, date, games, lead, showDate = false }) {
   if (!games.length) return null;
+  const leadText = date
+    ? `${formatGameDate(date)}${lead || ""}`
+    : lead;
   return (
     <section className="panel">
       <h2>{title}</h2>
-      <p className="panel-lead">
-        {date ? `${formatGameDate(date)}${lead}` : lead.replace(/^の/, "")}
-      </p>
+      {leadText ? <p className="panel-lead">{leadText}</p> : null}
       <div className="today-grid">
         {games.map((game, index) => (
           <GameCard
             key={`${game.date}-${game.ateam}-${game.bteam}-${index}`}
             game={game}
+            showDate={showDate}
           />
         ))}
       </div>
@@ -123,7 +132,12 @@ const TodayGames = () => {
   const games = payload?.games || [];
   const yesterday = payload?.yesterday || {};
   const yesterdayGames = yesterday.games || [];
-  if (games.length === 0 && yesterdayGames.length === 0) {
+  const bracket = buildBracket(
+    payload?.series || [],
+    payload?.places || {},
+    payload?.records || {}
+  );
+  if (games.length === 0 && yesterdayGames.length === 0 && !bracket) {
     return null;
   }
 
@@ -141,6 +155,7 @@ const TodayGames = () => {
         games={yesterdayGames}
         lead="の結果です。"
       />
+      <PostseasonBracket bracket={bracket} />
     </>
   );
 };

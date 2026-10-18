@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import pathsetup  # noqa: F401
 from scrape import (
     finished_game_rows,
+    parse_calendar_cards,
     parse_daily_html,
     parse_schedule_html,
     team_abbr_from_img,
@@ -137,6 +138,60 @@ class ParseDailyHtmlTest(unittest.TestCase):
     def test_ignores_other_years(self):
         html = DAILY_FIXTURE.read_text(encoding="utf-8")
         self.assertEqual(parse_daily_html(html, 2025), [])
+
+    def test_falls_back_to_schedule_section_on_the_heading_date(self):
+        html = """
+        <div id="game_score"><h4>試合速報</h4><h5>10月18日（日）</h5>試合が予定されていません。</div>
+        <div id="schedule_section">
+          <div class="block">
+            <h6 class="date">10月17日（土）</h6>
+            <a href="/scores/2026/1017/t-db-04/" class="link_block">
+              <table>
+                <tr>
+                  <td class="team1"><img src="/img/ini_t_m.png" alt=""></td>
+                  <td class="score">5</td><td>-</td><td class="score">8</td>
+                  <td class="team2"><img src="/img/ini_db_m.png" alt=""></td>
+                </tr>
+                <tr><td class="state" colspan="5">甲子園</td></tr>
+              </table>
+            </a>
+          </div>
+          <div class="block holiday">
+            <h6 class="date">10月18日（日）</h6>
+            <div class="no_schedule">試合がありません</div>
+          </div>
+        </div>
+        """
+        self.assertEqual(parse_daily_html(html, 2026), [])
+
+    def test_reads_unplayed_calendar_cards(self):
+        html = """
+        <div id="calendar">
+          <table><tr><td>
+            <div class="date">24</div>
+            <a href="http://www.baystars.co.jp/ticket/" class="link_block">
+              <table>
+                <tr>
+                  <td class="team1"><img src="/img/ini_db_m.png" alt=""></td>
+                  <td class="state" colspan="3">18:30</td>
+                  <td class="team2"><img src="/img/ini_h_m.png" alt=""></td>
+                </tr>
+                <tr><td class="state" colspan="5">横浜</td></tr>
+              </table>
+            </a>
+          </td></tr></table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        cards = parse_calendar_cards(soup.find("div", id="calendar"), 2026, 10)
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["ateam"], "デ")
+        self.assertEqual(cards[0]["bteam"], "ソ")
+        self.assertEqual(cards[0]["status"], "試合前")
+        self.assertEqual(cards[0]["note"], "18:30")
+        self.assertEqual(cards[0]["date"], "2026-10-24")
+        games, _ranks = parse_schedule_html(html, 2026, 10)
+        self.assertEqual(games, [])
 
 
 class UpsertGamesTest(unittest.TestCase):
