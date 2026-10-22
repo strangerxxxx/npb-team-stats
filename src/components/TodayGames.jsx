@@ -9,7 +9,12 @@ import {
   statusText,
 } from "../utils/todayGames";
 import PostseasonBracket from "./PostseasonBracket";
-import { buildBracket, seriesGameLabel } from "../utils/postseason";
+import {
+  buildBracket,
+  matchForGame,
+  seriesGameLabel,
+  seriesProbText,
+} from "../utils/postseason";
 
 function Delta({ value }) {
   const text = formatRatingDelta(value);
@@ -27,9 +32,9 @@ function Score({ value, winner }) {
   );
 }
 
-function SideStats({ rating, winPct, delta, finished }) {
+function SideStats({ rating, winPct, seriesProb, delta, finished }) {
   const ratingText = formatRating(rating);
-  const winPctText = formatWinPct(winPct);
+  const winPctText = seriesProb || formatWinPct(winPct);
   return (
     <div className="today-side-stats">
       {ratingText ? <span className="today-rating">{ratingText}</span> : null}
@@ -39,7 +44,7 @@ function SideStats({ rating, winPct, delta, finished }) {
   );
 }
 
-export function GameCard({ game, showDate = false }) {
+export function GameCard({ game, showDate = false, seriesMatch = null }) {
   const finished = game.status === "試合終了";
   const showScore =
     (finished || game.status === "試合中") &&
@@ -68,6 +73,7 @@ export function GameCard({ game, showDate = false }) {
           <SideStats
             rating={game.a_rating}
             winPct={game.a_win_pct}
+            seriesProb={seriesProbText(seriesMatch, game.ateam)}
             delta={game.a_delta}
             finished={finished}
           />
@@ -88,6 +94,7 @@ export function GameCard({ game, showDate = false }) {
           <SideStats
             rating={game.b_rating}
             winPct={game.b_win_pct}
+            seriesProb={seriesProbText(seriesMatch, game.bteam)}
             delta={game.b_delta}
             finished={finished}
           />
@@ -97,7 +104,7 @@ export function GameCard({ game, showDate = false }) {
   );
 }
 
-function GamesBlock({ title, date, games, lead, showDate = false }) {
+function GamesBlock({ title, date, games, lead, showDate = false, bracket = null }) {
   if (!games.length) return null;
   const leadText = date
     ? `${formatGameDate(date)}${lead || ""}`
@@ -112,6 +119,7 @@ function GamesBlock({ title, date, games, lead, showDate = false }) {
             key={`${game.date}-${game.ateam}-${game.bteam}-${index}`}
             game={game}
             showDate={showDate}
+            seriesMatch={matchForGame(game, bracket)}
           />
         ))}
       </div>
@@ -148,12 +156,14 @@ const TodayGames = () => {
         date={payload.date}
         games={games}
         lead="のカードです。"
+        bracket={bracket}
       />
       <GamesBlock
         title="昨日の試合"
         date={yesterday.date}
         games={yesterdayGames}
         lead="の結果です。"
+        bracket={bracket}
       />
       <PostseasonBracket bracket={bracket} />
     </>

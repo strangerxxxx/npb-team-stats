@@ -1,6 +1,7 @@
 import TeamLabel from "./TeamLabel";
+import { formatSeriesProb } from "../utils/postseason";
 
-function TeamRow({ row, decided }) {
+function TeamRow({ row, decided, probLabel }) {
   const classes = [
     "bracket-team",
     row.isWinner ? "is-winner" : "",
@@ -8,14 +9,18 @@ function TeamRow({ row, decided }) {
   ]
     .filter(Boolean)
     .join(" ");
+  const probText = formatSeriesProb(probLabel, row.prob);
   return (
     <div className={classes}>
       <span className="bracket-seed">{row.seed || ""}</span>
-      {row.abbr ? (
-        <TeamLabel abbr={row.abbr} />
-      ) : (
-        <span className="bracket-tbd">未定</span>
-      )}
+      <div className="bracket-team-info">
+        {row.abbr ? (
+          <TeamLabel abbr={row.abbr} />
+        ) : (
+          <span className="bracket-tbd">未定</span>
+        )}
+        {probText ? <span className="bracket-prob">{probText}</span> : null}
+      </div>
       <span className="bracket-wins">
         {row.advantage ? <span className="bracket-adv">ADV</span> : null}
         {row.abbr ? row.wins : "–"}
@@ -34,6 +39,7 @@ function Match({ match }) {
           key={row.abbr || `empty-${index}`}
           row={row}
           decided={Boolean(match.winner)}
+          probLabel={match.winner ? "" : match.probLabel}
         />
       ))}
       {match.note ? <p className="bracket-note">{match.note}</p> : null}

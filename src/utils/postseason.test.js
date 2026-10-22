@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBracket,
+  eloWinProb,
   finalStageFormat,
+  formatSeriesProb,
   groupPostseason,
   seriesDecision,
   seriesGameLabel,
   seriesHeading,
+  seriesWinProb,
 } from "./postseason";
 
 describe("seriesGameLabel", () => {
@@ -121,6 +124,45 @@ describe("buildBracket", () => {
     expect(bracket.japan.rows.map((row) => row.abbr)).toEqual(["デ", "ソ"]);
     expect(bracket.japan.winner).toBeNull();
   });
+
+  it("adds 突破率 to an undecided CS series and 優勝率 to an undecided Japan Series", () => {
+    const games = [
+      finished("巨", "デ", 1, 2, "ファーストステージ", "central"),
+      {
+        series: "クライマックスシリーズ",
+        stage: "ファーストステージ",
+        league: "central",
+        ateam: "巨",
+        bteam: "デ",
+        ascore: null,
+        bscore: null,
+        status: "試合前",
+        a_rating: 1540,
+        b_rating: 1500,
+      },
+      {
+        series: "日本シリーズ",
+        stage: "",
+        league: "",
+        ateam: "デ",
+        bteam: "ソ",
+        status: "試合前",
+        a_rating: 1575.13,
+        b_rating: 1652.84,
+      },
+    ];
+    const bracket = buildBracket(games, { 神: 1, 巨: 2, デ: 3, ソ: 1, 西: 2, 日: 3 });
+    const first = bracket.leagues[0].first;
+    expect(first.winner).toBeNull();
+    expect(first.probLabel).toBe("突破率");
+    expect(first.rows.map((row) => row.abbr)).toEqual(["巨", "デ"]);
+    expect(first.rows[0].prob + first.rows[1].prob).toBeCloseTo(1);
+    expect(first.rows[1].prob).toBeGreaterThan(first.rows[0].prob);
+    expect(bracket.japan.probLabel).toBe("優勝率");
+    expect(bracket.japan.rows.find((row) => row.abbr === "ソ").prob).toBeGreaterThan(
+      bracket.japan.rows.find((row) => row.abbr === "デ").prob
+    );
+  });
 });
 
 describe("seriesDecision", () => {
@@ -148,6 +190,71 @@ describe("seriesDecision", () => {
         games: [{ status: "試合終了" }, { status: "試合終了" }],
       })
     ).toBe("巨");
+  });
+});
+
+describe("seriesWinProb", () => {
+  it("does not treat a missing game probability as zero", () => {
+    expect(
+      seriesWinProb({
+        gameProb: null,
+        highWins: 0,
+        lowWins: 0,
+        remaining: 3,
+        target: 2,
+      })
+    ).toBeNull();
+  });
+
+  it("gives the higher seed a first-stage edge only through remaining games", () => {
+    expect(
+      seriesWinProb({
+        gameProb: 0.6,
+        highWins: 0,
+        lowWins: 0,
+        remaining: 3,
+        target: 2,
+      })
+    ).toBeCloseTo(0.6 ** 2 * (3 - 2 * 0.6));
+    expect(
+      seriesWinProb({
+        gameProb: 0.55,
+        highWins: 1,
+        lowWins: 1,
+        remaining: 1,
+        target: 2,
+      })
+    ).toBeCloseTo(0.55);
+  });
+
+  it("gives Japan Series odds for first to 4 in 7", () => {
+    const p = 0.39;
+    const q = 1 - p;
+    const expected =
+      p ** 4 * (1 + 4 * q + 10 * q ** 2 + 20 * q ** 3);
+    expect(
+      seriesWinProb({
+        gameProb: p,
+        highWins: 0,
+        lowWins: 0,
+        remaining: 7,
+        target: 4,
+      })
+    ).toBeCloseTo(expected);
+  });
+});
+
+describe("eloWinProb", () => {
+  it("is 0.5 for equal ratings", () => {
+    expect(eloWinProb(1500, 1500)).toBeCloseTo(0.5);
+  });
+});
+
+describe("formatSeriesProb", () => {
+  it("formats a series probability label", () => {
+    expect(formatSeriesProb("突破率", 0.648)).toBe("突破率64.8%");
+    expect(formatSeriesProb("優勝率", 0.2708)).toBe("優勝率27.1%");
+    expect(formatSeriesProb("優勝率", null)).toBe("");
   });
 });
 

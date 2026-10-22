@@ -165,11 +165,104 @@ export function seriesDecision({
   const low = wins[lowerSeed] || 0;
   if (high >= target) return higherSeed;
   if (low >= target) return lowerSeed;
-  const played = (games || []).filter((game) => game.status === "試合終了").length;
-  const remaining = Math.max(0, maxGames - played);
+  const remaining = remainingGames(maxGames, games);
   if (high >= low + remaining) return higherSeed;
   if (low > high + remaining) return lowerSeed;
   return null;
+}
+
+export function remainingGames(maxGames, games) {
+  const played = (games || []).filter((game) => game.status === "試合終了").length;
+  return Math.max(0, (maxGames || 0) - played);
+}
+
+export function ratingsFromGames(games) {
+  const ratings = {};
+  for (const game of games || []) {
+    const a = Number(game.a_rating);
+    const b = Number(game.b_rating);
+    if (game.ateam && Number.isFinite(a)) ratings[game.ateam] = a;
+    if (game.bteam && Number.isFinite(b)) ratings[game.bteam] = b;
+  }
+  return ratings;
+}
+
+export function eloWinProb(ratingA, ratingB) {
+  const a = Number(ratingA);
+  const b = Number(ratingB);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return 1 / (1 + 10 ** ((b - a) / 400));
+}
+
+export function seriesWinProb({ gameProb, highWins, lowWins, remaining, target }) {
+  if (gameProb == null || gameProb === "") return null;
+  const p = Number(gameProb);
+  if (!Number.isFinite(p) || remaining < 0 || target == null) return null;
+  const memo = new Map();
+  const dp = (high, low, left) => {
+    const key = `${high}|${low}|${left}`;
+    if (memo.has(key)) return memo.get(key);
+    let value;
+    if (high >= target) value = 1;
+    else if (low >= target) value = 0;
+    else if (left <= 0) value = high >= low ? 1 : 0;
+    else if (high >= low + left) value = 1;
+    else if (low > high + left) value = 0;
+    else {
+      value = p * dp(high + 1, low, left - 1) + (1 - p) * dp(high, low + 1, left - 1);
+    }
+    memo.set(key, value);
+    return value;
+  };
+  return dp(highWins || 0, lowWins || 0, remaining);
+}
+
+export function formatSeriesProb(label, value) {
+  if (!label || value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${label}${(n * 100).toFixed(1)}%`;
+}
+
+export function seriesProbText(match, abbr) {
+  if (!match?.probLabel || match.winner || !abbr) return "";
+  const row = (match.rows || []).find((item) => item.abbr === abbr);
+  return formatSeriesProb(match.probLabel, row?.prob);
+}
+
+export function matchForGame(game, bracket) {
+  if (!game?.series || !bracket) return null;
+  if (game.series === "日本シリーズ") return bracket.japan || null;
+  const league = (bracket.leagues || []).find((item) => item.id === game.league);
+  if (!league) return null;
+  if (game.stage === "ファーストステージ") return league.first;
+  if (game.stage === "ファイナルステージ") return league.final;
+  return null;
+}
+
+function withSeriesProbs(
+  match,
+  { higher, lower, ratings, remaining, target, highWins, lowWins, label }
+) {
+  if (!match.ready || match.winner || !higher || !lower) return match;
+  const gameProb = eloWinProb(ratings?.[higher], ratings?.[lower]);
+  const highProb = seriesWinProb({
+    gameProb,
+    highWins,
+    lowWins,
+    remaining,
+    target,
+  });
+  if (highProb == null) return match;
+  return {
+    ...match,
+    probLabel: label,
+    rows: match.rows.map((row) => ({
+      ...row,
+      prob:
+        row.abbr === higher ? highProb : row.abbr === lower ? 1 - highProb : null,
+    })),
+  };
 }
 
 function matchRow(abbr, { seed, wins, advantage = 0, isWinner = false }) {
@@ -195,7 +288,7 @@ function makeMatch({ title, note, target, rows, winner }) {
   };
 }
 
-function leagueBracket(groups, places, records, id, name, pool) {
+function leagueBracket(groups, places, records, id, name, pool, ratings) {
   const firstGames = findGroup(
     groups,
     "クライマックスシリーズ",
@@ -223,22 +316,34 @@ function leagueBracket(groups, places, records, id, name, pool) {
     maxGames: FIRST_STAGE_GAMES,
     games: firstGames,
   });
-  const first = makeMatch({
-    title: "ファーストステージ",
-    note: "3試合制・2勝先取（同勝なら2位）",
-    target: FIRST_STAGE_WINS,
-    winner: firstWinner,
-    rows: [
-      matchRow(seed2, {
-        seed: seed2 ? places[seed2] || 2 : null,
-        wins: firstWins,
-      }),
-      matchRow(seed3, {
-        seed: seed3 ? places[seed3] || 3 : null,
-        wins: firstWins,
-      }),
-    ],
-  });
+  const first = withSeriesProbs(
+    makeMatch({
+      title: "ファーストステージ",
+      note: "3試合制・2勝先取（同勝なら2位）",
+      target: FIRST_STAGE_WINS,
+      winner: firstWinner,
+      rows: [
+        matchRow(seed2, {
+          seed: seed2 ? places[seed2] || 2 : null,
+          wins: firstWins,
+        }),
+        matchRow(seed3, {
+          seed: seed3 ? places[seed3] || 3 : null,
+          wins: firstWins,
+        }),
+      ],
+    }),
+    {
+      higher: seed2,
+      lower: seed3,
+      ratings,
+      remaining: remainingGames(FIRST_STAGE_GAMES, firstGames),
+      target: FIRST_STAGE_WINS,
+      highWins: firstWins[seed2] || 0,
+      lowWins: firstWins[seed3] || 0,
+      label: "突破率",
+    }
+  );
   const seed1 = placeTeam(places, pool, 1) || otherTeam(finalGames, first.winner);
   const challenger = first.winner || otherTeam(finalGames, seed1);
   const format = finalStageFormat(seed1, challenger, records);
@@ -256,33 +361,46 @@ function leagueBracket(groups, places, records, id, name, pool) {
     id,
     name,
     first,
-    final: makeMatch({
-      title: "ファイナルステージ",
-      note: format.note,
-      target: format.target,
-      winner: finalWinner,
-      rows: [
-        matchRow(seed1, {
-          seed: 1,
-          wins: finalWins,
-          advantage,
-        }),
-        matchRow(challenger, {
-          seed: places[challenger] || null,
-          wins: finalWins,
-        }),
-      ],
-    }),
+    final: withSeriesProbs(
+      makeMatch({
+        title: "ファイナルステージ",
+        note: format.note,
+        target: format.target,
+        winner: finalWinner,
+        rows: [
+          matchRow(seed1, {
+            seed: 1,
+            wins: finalWins,
+            advantage,
+          }),
+          matchRow(challenger, {
+            seed: places[challenger] || null,
+            wins: finalWins,
+          }),
+        ],
+      }),
+      {
+        higher: seed1,
+        lower: challenger,
+        ratings,
+        remaining: remainingGames(format.maxGames, finalGames),
+        target: format.target,
+        highWins: (finalWins[seed1] || 0) + advantage,
+        lowWins: finalWins[challenger] || 0,
+        label: "突破率",
+      }
+    ),
   };
 }
 
 export function buildBracket(seriesGames, places = {}, records = {}) {
   const groups = groupPostseason(seriesGames);
   if (!groups.length) return null;
+  const ratings = ratingsFromGames(seriesGames);
 
   const leagues = [
-    leagueBracket(groups, places, records, "central", "セ・リーグ", CENTRAL),
-    leagueBracket(groups, places, records, "pacific", "パ・リーグ", PACIFIC),
+    leagueBracket(groups, places, records, "central", "セ・リーグ", CENTRAL, ratings),
+    leagueBracket(groups, places, records, "pacific", "パ・リーグ", PACIFIC, ratings),
   ];
   const japanGames = findGroup(groups, "日本シリーズ", "", "").games;
   const japanWins = seriesWins(japanGames);
@@ -306,15 +424,27 @@ export function buildBracket(seriesGames, places = {}, records = {}) {
   });
   return {
     leagues,
-    japan: makeMatch({
-      title: "日本シリーズ",
-      note: "7試合制・4勝先取",
-      target: JAPAN_SERIES_WINS,
-      winner: japanWinner,
-      rows: [
-        matchRow(home, { wins: japanWins }),
-        matchRow(away, { wins: japanWins }),
-      ],
-    }),
+    japan: withSeriesProbs(
+      makeMatch({
+        title: "日本シリーズ",
+        note: "7試合制・4勝先取",
+        target: JAPAN_SERIES_WINS,
+        winner: japanWinner,
+        rows: [
+          matchRow(home, { wins: japanWins }),
+          matchRow(away, { wins: japanWins }),
+        ],
+      }),
+      {
+        higher: home,
+        lower: away,
+        ratings,
+        remaining: remainingGames(JAPAN_SERIES_GAMES, japanGames),
+        target: JAPAN_SERIES_WINS,
+        highWins: japanWins[home] || 0,
+        lowWins: japanWins[away] || 0,
+        label: "優勝率",
+      }
+    ),
   };
 }

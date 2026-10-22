@@ -139,6 +139,8 @@ const payload = {
       series: "日本シリーズ",
       stage: "",
       league: "",
+      a_rating: 1575.13,
+      b_rating: 1652.84,
     },
   ],
 };
@@ -185,5 +187,7 @@ describe("TodayGames", () => {
     expect(screen.getAllByText("ファイナルステージ").length).toBeGreaterThan(0);
     expect(screen.getByText("日本シリーズ")).toBeInTheDocument();
     expect(screen.queryByText("クライマックスシリーズ ファイナルステージ 第4戦")).toBeNull();
+    expect(screen.getAllByText(/優勝率/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/突破率/)).toBeNull();
   });
 });
