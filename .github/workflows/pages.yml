@@ -20,11 +20,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
 
       - name: Install npm dependencies
@@ -36,40 +36,11 @@ jobs:
           VITE_DATA_BASE_URL: ${{ secrets.VITE_DATA_BASE_URL }}
         run: npm run build
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
       - id: deployment
-        uses: actions/deploy-pages@v4
-
-  vercel:
-    runs-on: ubuntu-latest
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Skip when Vercel is not configured
-        if: env.VERCEL_TOKEN == ''
-        run: echo "VERCEL_TOKEN が未設定のためスキップします。"
-
-      - if: env.VERCEL_TOKEN != ''
-        uses: actions/checkout@v4
-
-      - if: env.VERCEL_TOKEN != ''
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Link Vercel project
-        if: env.VERCEL_TOKEN != ''
-        run: |
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-
-      - name: Deploy
-        if: env.VERCEL_TOKEN != ''
-        run: npx vercel@59 deploy --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
+        uses: actions/deploy-pages@v5
