@@ -11,3 +11,4 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
 resolve_image_repos = true
+tags = "Name=npb-team-stats ManagedBy=cursor CreatedBy=cursor"

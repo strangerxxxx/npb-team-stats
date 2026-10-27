@@ -6,12 +6,23 @@ Globals:
   Function:
     Timeout: 900
     MemorySize: 2048
+    Tags:
+      Name: npb-team-stats
+      ManagedBy: cursor
+      CreatedBy: cursor
 
 Resources:
   DataBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub npb-team-stats-data-${AWS::AccountId}
+      Tags:
+        - Key: Name
+          Value: npb-team-stats
+        - Key: ManagedBy
+          Value: cursor
+        - Key: CreatedBy
+          Value: cursor
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -67,6 +78,13 @@ Resources:
   SchedulerRole:
     Type: AWS::IAM::Role
     Properties:
+      Tags:
+        - Key: Name
+          Value: npb-team-stats
+        - Key: ManagedBy
+          Value: cursor
+        - Key: CreatedBy
+          Value: cursor
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
