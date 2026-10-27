@@ -338,13 +338,20 @@ class WriteTodayGamesTest(unittest.TestCase):
             payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["date"], "2026-09-13")
         current = team_stats(scores, teams)
+        today_game = payload["games"][0]
         today_a, today_b = matchup_win_pcts(
-            current["ヤ"]["rating"],
-            current["中"]["rating"],
+            after_yesterday["ヤ"]["rating"],
+            after_yesterday["中"]["rating"],
         )
-        self.assertEqual(payload["games"][0]["a_win_pct"], today_a)
-        self.assertEqual(payload["games"][0]["b_win_pct"], today_b)
-        self.assertEqual(payload["games"][0]["a_rating"], current["ヤ"]["rating"])
+        self.assertEqual(today_game["a_win_pct"], today_a)
+        self.assertEqual(today_game["b_win_pct"], today_b)
+        self.assertEqual(today_game["a_rating"], after_yesterday["ヤ"]["rating"])
+        self.assertNotEqual(today_game["a_rating"], current["ヤ"]["rating"])
+        self.assertAlmostEqual(
+            today_game["a_rating"] + today_game["a_delta"],
+            current["ヤ"]["rating"],
+            places=2,
+        )
         yesterday_game = payload["yesterday"]["games"][0]
         self.assertEqual(payload["yesterday"]["date"], "2026-09-12")
         self.assertEqual(yesterday_game["ateam"], "神")

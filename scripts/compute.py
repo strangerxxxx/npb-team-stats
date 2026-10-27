@@ -814,6 +814,7 @@ def write_today_games(
     current_ymd = current.strftime("%Y-%m-%d")
     yesterday = (current - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     today_stats = team_stats(scores, teams_dict)
+    today_pre_stats, _today_pre_deltas = snapshot_through(completed, yesterday)
     if h2h is None or prev_ranks is None:
         _scores, games_remain, h2h, _teams, _teamdict, _updates, _deltas = apply_games(
             completed
@@ -834,14 +835,14 @@ def write_today_games(
         payload = json.loads(source.read_text(encoding="utf-8"))
         today_date = payload.get("date")
         today_games = attach_today_deltas(
-            payload.get("games") or [], deltas, today_stats
+            payload.get("games") or [], deltas, today_pre_stats
         )
     if not today_games:
         today_date = today_date or current_ymd
         today_games = attach_today_deltas(
             [card for card in postseason_cards if card.get("date") == current_ymd],
             deltas,
-            today_stats,
+            today_pre_stats,
         )
 
     yesterday_rows = merge_card_meta(

@@ -106,6 +106,16 @@ export function GameCard({ game, showDate = false, seriesMatch = null }) {
   );
 }
 
+function bracketAsOf(series, places, records, date, ratingGames) {
+  if (!date) return null;
+  return buildBracket(
+    snapshotSeriesGames(series, date),
+    places,
+    records,
+    ratingsFromGames(ratingGames)
+  );
+}
+
 function GamesBlock({ title, date, games, lead, showDate = false, bracket = null }) {
   if (!games.length) return null;
   const leadText = date
@@ -146,14 +156,14 @@ const TodayGames = () => {
   const records = payload?.records || {};
   const series = payload?.series || [];
   const bracket = buildBracket(series, places, records);
-  const yesterdayBracket = yesterday.date
-    ? buildBracket(
-        snapshotSeriesGames(series, yesterday.date),
-        places,
-        records,
-        ratingsFromGames(yesterdayGames)
-      )
-    : null;
+  const todayBracket = bracketAsOf(series, places, records, payload?.date, games);
+  const yesterdayBracket = bracketAsOf(
+    series,
+    places,
+    records,
+    yesterday.date,
+    yesterdayGames
+  );
   if (games.length === 0 && yesterdayGames.length === 0 && !bracket) {
     return null;
   }
@@ -165,7 +175,7 @@ const TodayGames = () => {
         date={payload.date}
         games={games}
         lead="のカードです。"
-        bracket={bracket}
+        bracket={todayBracket}
       />
       <GamesBlock
         title="昨日の試合"
