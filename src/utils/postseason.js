@@ -187,6 +187,14 @@ export function ratingsFromGames(games) {
   return ratings;
 }
 
+export function snapshotSeriesGames(seriesGames, asOfDate) {
+  if (!asOfDate) return seriesGames || [];
+  return (seriesGames || []).map((game) => {
+    if ((game.date || "") < asOfDate || game.status !== "試合終了") return game;
+    return { ...game, status: "試合前", ascore: null, bscore: null };
+  });
+}
+
 export function eloWinProb(ratingA, ratingB) {
   const a = Number(ratingA);
   const b = Number(ratingB);
@@ -393,10 +401,15 @@ function leagueBracket(groups, places, records, id, name, pool, ratings) {
   };
 }
 
-export function buildBracket(seriesGames, places = {}, records = {}) {
+export function buildBracket(
+  seriesGames,
+  places = {},
+  records = {},
+  ratingOverrides = {}
+) {
   const groups = groupPostseason(seriesGames);
   if (!groups.length) return null;
-  const ratings = ratingsFromGames(seriesGames);
+  const ratings = { ...ratingsFromGames(seriesGames), ...ratingOverrides };
 
   const leagues = [
     leagueBracket(groups, places, records, "central", "セ・リーグ", CENTRAL, ratings),

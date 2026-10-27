@@ -9,6 +9,7 @@ import {
   seriesGameLabel,
   seriesHeading,
   seriesWinProb,
+  snapshotSeriesGames,
 } from "./postseason";
 
 describe("seriesGameLabel", () => {
@@ -162,6 +163,85 @@ describe("buildBracket", () => {
     expect(bracket.japan.rows.find((row) => row.abbr === "ソ").prob).toBeGreaterThan(
       bracket.japan.rows.find((row) => row.abbr === "デ").prob
     );
+  });
+
+  it("computes Japan Series 優勝率 from ratings and series score as of a date", () => {
+    const prior = { デ: 1575.13, ソ: 1652.84 };
+    const current = { デ: 1581.0, ソ: 1646.0 };
+    const games = [
+      {
+        date: "2026-10-24",
+        series: "日本シリーズ",
+        stage: "",
+        league: "",
+        ateam: "デ",
+        bteam: "ソ",
+        ascore: "5",
+        bscore: "3",
+        status: "試合終了",
+        a_rating: current.デ,
+        b_rating: current.ソ,
+      },
+      {
+        date: "2026-10-25",
+        series: "日本シリーズ",
+        stage: "",
+        league: "",
+        ateam: "デ",
+        bteam: "ソ",
+        ascore: "2",
+        bscore: "4",
+        status: "試合終了",
+        a_rating: current.デ,
+        b_rating: current.ソ,
+      },
+    ];
+    const now = buildBracket(games, { 神: 1, 巨: 2, デ: 3, ソ: 1, 西: 2, 日: 3 });
+    const asOf = buildBracket(
+      snapshotSeriesGames(games, "2026-10-25"),
+      { 神: 1, 巨: 2, デ: 3, ソ: 1, 西: 2, 日: 3 },
+      {},
+      prior
+    );
+    expect(now.japan.winner).toBeNull();
+    expect(asOf.japan.winner).toBeNull();
+    expect(now.japan.rows.map((row) => row.gameWins)).toEqual([1, 1]);
+    expect(asOf.japan.rows.map((row) => row.gameWins)).toEqual([1, 0]);
+    const denaNow = now.japan.rows.find((row) => row.abbr === "デ").prob;
+    const denaThen = asOf.japan.rows.find((row) => row.abbr === "デ").prob;
+    expect(denaThen).toBeCloseTo(
+      seriesWinProb({
+        gameProb: eloWinProb(prior.デ, prior.ソ),
+        highWins: 1,
+        lowWins: 0,
+        remaining: 6,
+        target: 4,
+      })
+    );
+    expect(denaNow).toBeCloseTo(
+      seriesWinProb({
+        gameProb: eloWinProb(current.デ, current.ソ),
+        highWins: 1,
+        lowWins: 1,
+        remaining: 5,
+        target: 4,
+      })
+    );
+    expect(denaThen).not.toBeCloseTo(denaNow, 3);
+  });
+});
+
+describe("snapshotSeriesGames", () => {
+  it("treats games on the as-of date as not yet finished", () => {
+    const snap = snapshotSeriesGames(
+      [
+        { date: "2026-10-24", status: "試合終了", ascore: "5", bscore: "3" },
+        { date: "2026-10-25", status: "試合終了", ascore: "2", bscore: "4" },
+      ],
+      "2026-10-25"
+    );
+    expect(snap[0]).toMatchObject({ status: "試合終了", ascore: "5" });
+    expect(snap[1]).toMatchObject({ status: "試合前", ascore: null, bscore: null });
   });
 });
 

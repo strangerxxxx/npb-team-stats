@@ -1,6 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TodayGames from "./TodayGames";
+import {
+  eloWinProb,
+  formatSeriesProb,
+  seriesWinProb,
+} from "../utils/postseason";
 
 const payload = {
   date: "2026-09-01",
@@ -189,5 +194,107 @@ describe("TodayGames", () => {
     expect(screen.queryByText("クライマックスシリーズ ファイナルステージ 第4戦")).toBeNull();
     expect(screen.getAllByText(/優勝率/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/突破率/)).toBeNull();
+  });
+
+  it("shows yesterday Japan Series 優勝率 from pre-game ratings and series score", async () => {
+    const prior = { デ: 1575.13, ソ: 1652.84 };
+    const current = { デ: 1581.0, ソ: 1646.0 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          date: "2026-10-26",
+          games: [],
+          yesterday: {
+            date: "2026-10-25",
+            games: [
+              {
+                date: "2026-10-25",
+                ateam: "デ",
+                bteam: "ソ",
+                ascore: "2",
+                bscore: "4",
+                status: "試合終了",
+                venue: "横浜",
+                series: "日本シリーズ",
+                stage: "",
+                league: "",
+                game_no: 2,
+                a_rating: prior.デ,
+                b_rating: prior.ソ,
+                a_win_pct: 0.39,
+                b_win_pct: 0.61,
+                a_delta: 5.87,
+                b_delta: -5.87,
+              },
+            ],
+          },
+          places: { 神: 1, 巨: 2, デ: 3, ソ: 1, 西: 2, 日: 3 },
+          records: {},
+          series: [
+            {
+              date: "2026-10-24",
+              ateam: "デ",
+              bteam: "ソ",
+              ascore: "5",
+              bscore: "3",
+              status: "試合終了",
+              series: "日本シリーズ",
+              stage: "",
+              league: "",
+              a_rating: current.デ,
+              b_rating: current.ソ,
+            },
+            {
+              date: "2026-10-25",
+              ateam: "デ",
+              bteam: "ソ",
+              ascore: "2",
+              bscore: "4",
+              status: "試合終了",
+              series: "日本シリーズ",
+              stage: "",
+              league: "",
+              a_rating: current.デ,
+              b_rating: current.ソ,
+            },
+          ],
+        }),
+      }))
+    );
+    const yesterdayText = formatSeriesProb(
+      "優勝率",
+      seriesWinProb({
+        gameProb: eloWinProb(prior.デ, prior.ソ),
+        highWins: 1,
+        lowWins: 0,
+        remaining: 6,
+        target: 4,
+      })
+    );
+    const currentText = formatSeriesProb(
+      "優勝率",
+      seriesWinProb({
+        gameProb: eloWinProb(current.デ, current.ソ),
+        highWins: 1,
+        lowWins: 1,
+        remaining: 5,
+        target: 4,
+      })
+    );
+    expect(yesterdayText).not.toBe(currentText);
+
+    render(<TodayGames />);
+    expect(await screen.findByText("昨日の試合")).toBeInTheDocument();
+    const card = screen.getByText("日本シリーズ 第2戦").closest(".today-card");
+    expect(card).toHaveTextContent(yesterdayText);
+    expect(card).not.toHaveTextContent(currentText);
+    expect(card).not.toHaveTextContent("勝率39.0%");
+    const bracket = screen.getByText("クライマックスシリーズ・日本シリーズ").closest(
+      "section"
+    );
+    expect(bracket).toHaveTextContent(currentText);
+    expect(bracket).not.toHaveTextContent(yesterdayText);
   });
 });

@@ -12,8 +12,10 @@ import PostseasonBracket from "./PostseasonBracket";
 import {
   buildBracket,
   matchForGame,
+  ratingsFromGames,
   seriesGameLabel,
   seriesProbText,
+  snapshotSeriesGames,
 } from "../utils/postseason";
 
 function Delta({ value }) {
@@ -140,11 +142,18 @@ const TodayGames = () => {
   const games = payload?.games || [];
   const yesterday = payload?.yesterday || {};
   const yesterdayGames = yesterday.games || [];
-  const bracket = buildBracket(
-    payload?.series || [],
-    payload?.places || {},
-    payload?.records || {}
-  );
+  const places = payload?.places || {};
+  const records = payload?.records || {};
+  const series = payload?.series || [];
+  const bracket = buildBracket(series, places, records);
+  const yesterdayBracket = yesterday.date
+    ? buildBracket(
+        snapshotSeriesGames(series, yesterday.date),
+        places,
+        records,
+        ratingsFromGames(yesterdayGames)
+      )
+    : null;
   if (games.length === 0 && yesterdayGames.length === 0 && !bracket) {
     return null;
   }
@@ -163,7 +172,7 @@ const TodayGames = () => {
         date={yesterday.date}
         games={yesterdayGames}
         lead="の結果です。"
-        bracket={bracket}
+        bracket={yesterdayBracket}
       />
       <PostseasonBracket bracket={bracket} />
     </>
