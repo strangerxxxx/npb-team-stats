@@ -759,6 +759,45 @@ def finished_games_on(
     return rows
 
 
+def apply_completed_to_series_cards(
+    cards: list[dict],
+    completed: list[tuple[str, str, str, str, str]],
+    extra_keys: set[tuple[str, frozenset[str]]],
+) -> list[dict]:
+    """カレンダー上の試合前カードを、確定したスコアで上書きする。"""
+    rows = [dict(card) for card in cards]
+    index = {
+        (row.get("date"), frozenset((row.get("ateam"), row.get("bteam")))): i
+        for i, row in enumerate(rows)
+        if row.get("ateam") and row.get("bteam")
+    }
+    for date, ateam, ascore, bteam, bscore in completed:
+        key = (date, frozenset((ateam, bteam)))
+        if key not in extra_keys:
+            continue
+        if key in index:
+            row = dict(rows[index[key]])
+            row["ascore"] = ascore
+            row["bscore"] = bscore
+            row["status"] = "試合終了"
+            rows[index[key]] = row
+            continue
+        index[key] = len(rows)
+        rows.append(
+            {
+                "date": date,
+                "ateam": ateam,
+                "bteam": bteam,
+                "ascore": ascore,
+                "bscore": bscore,
+                "status": "試合終了",
+                "venue": "",
+                "note": "",
+            }
+        )
+    return rows
+
+
 def write_today_games(
     year: int,
     deltas: dict[tuple[str, frozenset[str]], dict[str, float]],
@@ -816,30 +855,9 @@ def write_today_games(
             yesterday_rows, deltas, yesterday_stats
         )
 
-    series_source = postseason_cards[:]
-    seen = {
-        (row.get("date"), row.get("ateam"), row.get("bteam"))
-        for row in series_source
-    }
-    for date, ateam, ascore, bteam, bscore in completed:
-        if (date, frozenset((ateam, bteam))) not in extra_keys:
-            continue
-        key = (date, ateam, bteam)
-        if key in seen:
-            continue
-        seen.add(key)
-        series_source.append(
-            {
-                "date": date,
-                "ateam": ateam,
-                "bteam": bteam,
-                "ascore": ascore,
-                "bscore": bscore,
-                "status": "試合終了",
-                "venue": "",
-                "note": "",
-            }
-        )
+    series_source = apply_completed_to_series_cards(
+        postseason_cards, completed, extra_keys
+    )
     series_games = annotate_series(
         attach_today_deltas(series_source, deltas, today_stats),
         places,

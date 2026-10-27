@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import pathsetup  # noqa: F401
 from scrape import (
     finished_game_rows,
+    merge_postseason_cards,
     parse_calendar_cards,
     parse_daily_html,
     parse_schedule_html,
@@ -212,6 +213,38 @@ class UpsertGamesTest(unittest.TestCase):
             upsert_games(existing, [("2026-09-01", "ソ", "2", "日", "1")]),
             existing + [("2026-09-01", "ソ", "2", "日", "1")],
         )
+
+
+class MergePostseasonCardsTest(unittest.TestCase):
+    def test_applies_daily_final_score_to_scheduled_card(self):
+        cards = [
+            {
+                "date": "2026-10-27",
+                "ateam": "ソ",
+                "bteam": "デ",
+                "ascore": None,
+                "bscore": None,
+                "status": "試合前",
+                "venue": "みずほPayPay",
+                "note": "18:00",
+            }
+        ]
+        daily = [
+            {
+                "date": "2026-10-27",
+                "ateam": "ソ",
+                "bteam": "デ",
+                "ascore": "2",
+                "bscore": "1",
+                "status": "試合終了",
+                "venue": "みずほPayPay",
+                "note": "",
+            }
+        ]
+        merged = merge_postseason_cards(cards, daily)
+        self.assertEqual(merged[0]["status"], "試合終了")
+        self.assertEqual(merged[0]["ascore"], "2")
+        self.assertEqual(merged[0]["bscore"], "1")
 
 
 if __name__ == "__main__":

@@ -291,6 +291,33 @@ def write_postseason_cards(year: int, cards: list[dict[str, str | None]]) -> Non
     )
 
 
+def merge_postseason_cards(
+    cards: list[dict[str, str | None]],
+    daily: list[dict[str, str | None]],
+) -> list[dict[str, str | None]]:
+    """当日ページの確定結果を、カレンダー由来のポストシーズンカードへ反映する。"""
+    index = {
+        (card.get("date"), frozenset((card.get("ateam"), card.get("bteam")))): i
+        for i, card in enumerate(cards)
+        if card.get("ateam") and card.get("bteam")
+    }
+    out = [dict(card) for card in cards]
+    for game in daily:
+        ateam, bteam = game.get("ateam"), game.get("bteam")
+        date_value = game.get("date")
+        if not ateam or not bteam or not date_value:
+            continue
+        key = (date_value, frozenset((ateam, bteam)))
+        if key not in index:
+            continue
+        merged = dict(out[index[key]])
+        for field in ("ascore", "bscore", "status", "venue", "note"):
+            if game.get(field) not in (None, ""):
+                merged[field] = game[field]
+        out[index[key]] = merged
+    return out
+
+
 def upsert_games(
     games: list[tuple[str, str, str, str, str]],
     extra: list[tuple[str, str, str, str, str]],
@@ -333,16 +360,17 @@ def scrape_year(year: int) -> tuple[list[str], dict[str, int]]:
         if month < last_month:
             time.sleep(1)
 
-    if postseason_cards:
-        write_postseason_cards(year, postseason_cards)
-
     if year == date.today().year:
         try:
             daily = fetch_daily_games(year)
             games = upsert_games(games, finished_game_rows(daily))
             write_today_games(year, daily)
+            postseason_cards = merge_postseason_cards(postseason_cards, daily)
         except requests.RequestException:
             pass
+
+    if postseason_cards:
+        write_postseason_cards(year, postseason_cards)
 
     lines = [
         f"{ymd},{ateam},{ascore},{bteam},{bscore}\n"

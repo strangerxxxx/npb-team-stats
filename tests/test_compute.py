@@ -458,6 +458,75 @@ class WriteTodayGamesTest(unittest.TestCase):
         self.assertEqual(payload["games"], [])
         self.assertIn("places", payload)
 
+    def test_overlays_finished_scores_onto_unplayed_series_cards(self):
+        completed = [("2026-04-01", "デ", "1", "ソ", "0")] * INTERLEAGUE_GAMES
+        extra = ("2026-10-27", "ソ", "2", "デ", "1")
+        completed = [*completed, extra]
+        scores, _remain, _h2h, teams, _teamdict, _updates, deltas = apply_games(
+            completed
+        )
+        cards = [
+            {
+                "date": "2026-10-27",
+                "ateam": "ソ",
+                "bteam": "デ",
+                "ascore": None,
+                "bscore": None,
+                "status": "試合前",
+                "venue": "みずほPayPay",
+                "note": "18:00",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "today_2026.json"
+            cards_path = root / "postseason_2026.json"
+            output = root / "public"
+            output.mkdir()
+            source.write_text(
+                json.dumps(
+                    {
+                        "date": "2026-10-27",
+                        "games": [
+                            {
+                                "date": "2026-10-27",
+                                "ateam": "ソ",
+                                "bteam": "デ",
+                                "ascore": "2",
+                                "bscore": "1",
+                                "status": "試合終了",
+                                "venue": "みずほPayPay",
+                                "note": "",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cards_path.write_text(
+                json.dumps({"year": 2026, "games": cards}), encoding="utf-8"
+            )
+            with (
+                patch("compute.today_games_path", return_value=source),
+                patch("compute.postseason_cards_path", return_value=cards_path),
+                patch("compute.output_dir", return_value=output),
+            ):
+                write_today_games(
+                    2026,
+                    deltas,
+                    scores=scores,
+                    teams_dict=teams,
+                    completed=completed,
+                    today=real_date(2026, 10, 27),
+                )
+            payload = json.loads((output / "today_games.json").read_text(encoding="utf-8"))
+        series = payload["series"]
+        self.assertEqual(len(series), 1)
+        self.assertEqual(series[0]["status"], "試合終了")
+        self.assertEqual(series[0]["ascore"], "2")
+        self.assertEqual(series[0]["bscore"], "1")
+        self.assertEqual(series[0]["venue"], "みずほPayPay")
+
 
 class FileHasCompletedGamesTest(unittest.TestCase):
     def test_true_only_when_a_numeric_score_exists(self):
