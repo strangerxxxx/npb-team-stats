@@ -16,6 +16,9 @@ from compute import (
     extra_game_keys,
     format_win_pct,
     last_regular_season_date,
+    regular_season_complete,
+    shift_ymd,
+    victory_history_dates,
     games_behind,
     initial_games_remain,
     load_completed_games,
@@ -566,7 +569,30 @@ class ResolveYearTest(unittest.TestCase):
 
 
 class VictoryHistoryTest(unittest.TestCase):
-    def test_builds_one_snapshot_per_game_date(self):
+    def test_history_dates_start_before_opening_and_skip_postseason(self):
+        regular = [("2026-04-01", "デ", "1", "ソ", "0")] * INTERLEAGUE_GAMES
+        extra = ("2026-10-10", "デ", "2", "ソ", "1")
+        games = [*regular, extra]
+        self.assertTrue(regular_season_complete(games))
+        self.assertEqual(last_regular_season_date(games), "2026-04-01")
+        self.assertEqual(
+            victory_history_dates(games),
+            ["2026-03-31", "2026-04-01", "2026-04-02"],
+        )
+        self.assertEqual(shift_ymd("2026-04-01", -1), "2026-03-31")
+
+    def test_history_dates_stop_at_last_game_while_season_continues(self):
+        games = [
+            ("2026-04-01", "神", "3", "中", "1"),
+            ("2026-04-02", "神", "2", "巨", "1"),
+        ]
+        self.assertFalse(regular_season_complete(games))
+        self.assertEqual(
+            victory_history_dates(games),
+            ["2026-03-31", "2026-04-01", "2026-04-02"],
+        )
+
+    def test_builds_one_snapshot_per_display_date(self):
         games = [
             ("2026-04-01", "神", "3", "中", "1"),
             ("2026-04-02", "神", "2", "巨", "1"),
@@ -575,14 +601,15 @@ class VictoryHistoryTest(unittest.TestCase):
         missing = str(Path(tempfile.gettempdir()) / "no-npb-sim")
         with patch.dict(os.environ, {"NPB_SIM_BIN": missing}):
             dates, history, last_ranks = build_victory_history(games, prev, 40)
-        self.assertEqual(dates, ["2026-04-01", "2026-04-02"])
-        self.assertEqual(len(history), 2)
+        self.assertEqual(dates, ["2026-03-31", "2026-04-01", "2026-04-02"])
+        self.assertEqual(len(history), 3)
         self.assertEqual(len(history[0]), 12)
         self.assertEqual(len(history[0][0]), 6)
         self.assertAlmostEqual(sum(row[0] for row in history[0][:6]), 100.0, places=1)
         self.assertAlmostEqual(sum(row[0] for row in history[0][6:]), 100.0, places=1)
         self.assertIsNotNone(last_ranks)
         self.assertNotEqual(history[0], history[1])
+        self.assertNotEqual(history[1], history[2])
 
     def test_writes_history_json(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -608,7 +635,9 @@ class VictoryHistoryTest(unittest.TestCase):
             dates, history, last_ranks = build_victory_history(
                 [*regular, extra], prev, 20
             )
-        self.assertEqual(dates[-1], "2026-10-10")
+        self.assertEqual(dates[0], "2026-03-31")
+        self.assertEqual(dates[-1], "2026-04-02")
+        self.assertNotIn("2026-10-10", dates)
         last = history[-1]
         self.assertTrue(all(abs(sum(row) - 100.0) < 0.01 for row in last))
         self.assertEqual(sum(1 for row in last[:6] if row[0] == 100.0), 1)

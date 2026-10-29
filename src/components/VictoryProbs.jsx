@@ -4,6 +4,9 @@ import CsvTable from "./CsvTable";
 import { dataUrl } from "../utils/loadCsv";
 import { formatGameDate } from "../utils/todayGames";
 import {
+  addDays,
+  clampDate,
+  dayOffset,
   formatSimCount,
   indexForDate,
   isDecidedProbs,
@@ -38,7 +41,7 @@ function FallbackTables({ centralOrder, pacificOrder }) {
 
 const VictoryProbs = ({ centralOrder, pacificOrder }) => {
   const [payload, setPayload] = useState(null);
-  const [index, setIndex] = useState(0);
+  const [selectedDate, setSelectedDate] = useState("");
   const [mode, setMode] = useState("loading");
 
   useEffect(() => {
@@ -50,14 +53,18 @@ const VictoryProbs = ({ centralOrder, pacificOrder }) => {
           return;
         }
         setPayload(data);
-        setIndex(data.dates.length - 1);
+        setSelectedDate(data.dates[data.dates.length - 1]);
         setMode("history");
       })
       .catch(() => setMode("csv"));
   }, []);
 
-  const lastIndex = (payload?.dates?.length || 1) - 1;
-  const date = payload?.dates?.[index];
+  const dates = payload?.dates || [];
+  const minDate = dates[0] || "";
+  const maxDate = dates[dates.length - 1] || "";
+  const date = selectedDate || maxDate;
+  const index = indexForDate(dates, date);
+  const span = minDate && maxDate ? dayOffset(minDate, maxDate) : 0;
   const count = payload?.count || 100000;
   const decided = isDecidedProbs(payload?.probs?.[index]);
   const centralRows = useMemo(
@@ -88,29 +95,31 @@ const VictoryProbs = ({ centralOrder, pacificOrder }) => {
               className="victory-date-slider"
               type="range"
               min={0}
-              max={lastIndex}
+              max={span}
               step={1}
-              value={index}
+              value={dayOffset(minDate, date)}
               aria-valuetext={date}
-              onChange={(event) => setIndex(Number(event.target.value))}
+              onChange={(event) =>
+                setSelectedDate(addDays(minDate, Number(event.target.value)))
+              }
             />
             <input
               className="victory-date-input"
               type="date"
-              min={payload.dates[0]}
-              max={payload.dates[lastIndex]}
+              min={minDate}
+              max={maxDate}
               value={date}
               aria-label="表示する日付"
               onChange={(event) =>
-                setIndex(indexForDate(payload.dates, event.target.value))
+                setSelectedDate(clampDate(event.target.value, minDate, maxDate))
               }
             />
             <Button
               type="button"
-              variant={index === lastIndex ? "success" : "outline-success"}
+              variant={date === maxDate ? "success" : "outline-success"}
               size="sm"
-              disabled={index === lastIndex}
-              onClick={() => setIndex(lastIndex)}
+              disabled={date === maxDate}
+              onClick={() => setSelectedDate(maxDate)}
             >
               最新
             </Button>

@@ -453,15 +453,13 @@ def build_victory_history(
     prev_ranks: list[int],
     count: int,
 ) -> tuple[list[str], list[list[list[float]]], list[list[int]] | None]:
-    """各試合日終了時点の最終順位確率を返す。"""
-    dates = sorted({game[0] for game in games})
+    """開幕前日からレギュラーシーズン最終戦翌日までの最終順位確率を返す。"""
+    dates = victory_history_dates(games)
     history: list[list[list[float]]] = []
     last_ranks: list[list[int]] | None = None
     total = len(dates)
-    extra_start = min(
-        (date for date, _key in extra_game_keys(games)),
-        default=None,
-    )
+    last_regular = last_regular_season_date(games)
+    finished = regular_season_complete(games)
     for i, day in enumerate(dates, start=1):
         subset = [game for game in games if game[0] <= day]
         _scores, remain, h2h, teams_dict, _teamdict, _updates, _deltas = apply_games(
@@ -469,7 +467,7 @@ def build_victory_history(
         )
         teams = [teams_dict[name] for name in TEAMNAMES]
         matchups = remaining_matchups(remain, win_prob_matrix(teams))
-        if extra_start and day >= extra_start:
+        if finished and last_regular and day > last_regular:
             matchups = []
         last_ranks = simulate_ranks(
             h2h, prev_ranks, matchups, count, verbose=False
@@ -625,6 +623,12 @@ def classify_series(
     return "クライマックスシリーズ", "ファーストステージ", league
 
 
+def shift_ymd(ymd: str, days: int) -> str:
+    return (
+        datetime.date.fromisoformat(ymd) + datetime.timedelta(days=days)
+    ).strftime("%Y-%m-%d")
+
+
 def extra_game_keys(
     games: list[tuple[str, str, str, str, str]],
 ) -> set[tuple[str, frozenset[str]]]:
@@ -659,6 +663,56 @@ def last_regular_season_date(
         remain[ia][ib] -= 1
         remain[ib][ia] -= 1
     return last
+
+
+def remain_after_regular_season(
+    games: list[tuple[str, str, str, str, str]],
+) -> list[list[int]]:
+    remain = initial_games_remain()
+    teamdict = {name: i for i, name in enumerate(TEAMNAMES)}
+    for _date, ateam, _ascore, bteam, _bscore in games:
+        if ateam not in teamdict or bteam not in teamdict:
+            continue
+        ia, ib = teamdict[ateam], teamdict[bteam]
+        if remain[ia][ib] == 0:
+            continue
+        remain[ia][ib] -= 1
+        remain[ib][ia] -= 1
+    return remain
+
+
+def regular_season_complete(
+    games: list[tuple[str, str, str, str, str]],
+) -> bool:
+    if extra_game_keys(games):
+        return True
+    remain = remain_after_regular_season(games)
+    return all(
+        remain[i][j] == 0
+        for i in range(len(remain))
+        for j in range(i + 1, len(remain))
+    )
+
+
+def victory_history_dates(
+    games: list[tuple[str, str, str, str, str]],
+) -> list[str]:
+    extra_keys = extra_game_keys(games)
+    regular = sorted(
+        {
+            date
+            for date, ateam, _ascore, bteam, _bscore in games
+            if (date, frozenset((ateam, bteam))) not in extra_keys
+        }
+    )
+    if not regular:
+        return []
+    dates = [shift_ymd(regular[0], -1), *regular]
+    if regular_season_complete(games):
+        end = shift_ymd(last_regular_season_date(games) or regular[-1], 1)
+        if end not in dates:
+            dates.append(end)
+    return dates
 
 
 def card_is_postseason(

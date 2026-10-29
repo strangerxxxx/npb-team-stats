@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  addDays,
+  clampDate,
+  dayOffset,
   formatSimCount,
   indexForDate,
   isDecidedProbs,
@@ -73,6 +76,16 @@ describe("indexForDate", () => {
     expect(indexForDate(payload.dates, "2026-04-02")).toBe(0);
     expect(indexForDate(payload.dates, "2026-04-03")).toBe(1);
     expect(indexForDate(payload.dates, "2026-03-01")).toBe(0);
+  });
+});
+
+describe("calendar range helpers", () => {
+  it("shifts ISO dates without using the local timezone", () => {
+    expect(addDays("2026-03-27", -1)).toBe("2026-03-26");
+    expect(addDays("2026-10-08", 1)).toBe("2026-10-09");
+    expect(dayOffset("2026-03-26", "2026-10-09")).toBe(197);
+    expect(clampDate("2026-03-01", "2026-03-26", "2026-10-09")).toBe("2026-03-26");
+    expect(clampDate("2026-10-27", "2026-03-26", "2026-10-09")).toBe("2026-10-09");
   });
 });
 

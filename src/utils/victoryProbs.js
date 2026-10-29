@@ -22,6 +22,27 @@ export function leagueSnapshot(payload, dateIndex, start) {
   return snapshotRows(probs.slice(start, start + 6), teams.slice(start, start + 6));
 }
 
+export function addDays(iso, days) {
+  const [year, month, day] = String(iso).split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const date = new Date(Date.UTC(year, month - 1, day + Number(days)));
+  return date.toISOString().slice(0, 10);
+}
+
+export function dayOffset(start, iso) {
+  const from = Date.parse(`${start}T00:00:00Z`);
+  const to = Date.parse(`${iso}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.round((to - from) / 86400000);
+}
+
+export function clampDate(iso, min, max) {
+  if (!iso) return min || "";
+  if (min && iso < min) return min;
+  if (max && iso > max) return max;
+  return iso;
+}
+
 export function indexForDate(dates, iso) {
   if (!dates?.length) return 0;
   let index = 0;

@@ -59,9 +59,15 @@ describe("VictoryProbs", () => {
       await screen.findByText("4月3日終了時点の残り試合を10万回シミュレーションした最終順位の割合です。")
     ).toBeInTheDocument();
     expect(screen.getByText("80.00")).toBeInTheDocument();
+    const dateInput = screen.getByLabelText("表示する日付");
+    expect(dateInput).toHaveAttribute("min", "2026-04-01");
+    expect(dateInput).toHaveAttribute("max", "2026-04-03");
     fireEvent.change(screen.getByLabelText("表示日"), { target: { value: "0" } });
     expect(screen.getByText("4月1日終了時点の残り試合を10万回シミュレーションした最終順位の割合です。")).toBeInTheDocument();
     expect(screen.getAllByText("40.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("80.00")).not.toBeInTheDocument();
+    fireEvent.change(dateInput, { target: { value: "2026-04-02" } });
+    expect(screen.getByText("4月2日終了時点の残り試合を10万回シミュレーションした最終順位の割合です。")).toBeInTheDocument();
+    expect(screen.getAllByText("40.00").length).toBeGreaterThan(0);
   });
 });
