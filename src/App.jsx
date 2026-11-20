@@ -110,6 +110,14 @@ function App() {
           </Suspense>
         </section>
       </Container>
+      <footer className="site-footer">
+        <Container>
+          <p>
+            こちらのデータは非公式です。試合結果は NPB
+            公式サイトをもとに集計しています。
+          </p>
+        </Container>
+      </footer>
       <Analytics />
       <SpeedInsights />
     </div>
